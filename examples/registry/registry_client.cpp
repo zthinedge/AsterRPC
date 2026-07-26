@@ -1,5 +1,5 @@
 #include "minirpc/cluster/ChannelManager.h"
-#include "minirpc/cluster/RoundRobin.h"
+#include "minirpc/loadbalance/P2cEwmaLoadBalancer.h"
 #include "minirpc/net/EventLoop.h"
 #include "minirpc/protocol/RpcMessage.h"
 #include "minirpc/registry/ZooKeeperClient.h"
@@ -23,6 +23,12 @@ namespace{
 
 constexpr const char* kServiceName="RegistryDemoService";
 constexpr const char* kMethodName="WhoAmI";
+using Clock=std::chrono::steady_clock;
+
+bool IsEndpointFailure(protocol::StatusCode status)noexcept{
+    return status==protocol::StatusCode::Timeout||
+           status==protocol::StatusCode::ConnectionFailed;
+}
 
 struct Arguments{
     std::string zookeeper_servers="127.0.0.1:2181";
@@ -119,7 +125,7 @@ int main(int argc,char* argv[]){
 
         LoopThread loop_thread;
         cluster::ChannelManager channels(loop_thread.Loop());
-        cluster::RoundRobin round_robin;
+        loadbalance::P2cEwmaLoadBalancer load_balancer;
 
         rpc::CallOptions call_options;
         call_options.idempotent=true;
@@ -130,10 +136,11 @@ int main(int argc,char* argv[]){
             ++request){
             registry::DiscoveryResult discovered=
                 discovery.Resolve(kServiceName);
-            std::optional<cluster::Endpoint> endpoint=
-                round_robin.Select(discovered.providers);
+            auto selection=load_balancer.Select(
+                discovered.providers
+            );
 
-            if(!endpoint.has_value()){
+            if(!selection.has_value()){
                 const char* state=
                     discovered.status==
                         registry::DiscoveryStatus::NoProvider
@@ -142,16 +149,40 @@ int main(int argc,char* argv[]){
                          <<" discovery="<<state
                          <<std::endl;
             }else{
-                auto pool=channels.GetOrCreate(*endpoint);
-                protocol::RpcMessage response=pool->Call(
-                    kServiceName,
-                    kMethodName,
-                    {},
-                    call_options
-                );
+                cluster::Endpoint endpoint=
+                    selection->GetEndpoint();
+                auto pool=channels.GetOrCreate(endpoint);
+                auto started_at=Clock::now();
+                protocol::RpcMessage response;
+
+                try{
+                    response=pool->Call(
+                        kServiceName,
+                        kMethodName,
+                        {},
+                        call_options
+                    );
+                }catch(...){
+                    auto latency=
+                        std::chrono::duration_cast<
+                            std::chrono::microseconds
+                        >(Clock::now()-started_at);
+                    selection->CompleteFailure(latency);
+                    throw;
+                }
+
+                auto latency=
+                    std::chrono::duration_cast<
+                        std::chrono::microseconds
+                    >(Clock::now()-started_at);
+                if(IsEndpointFailure(response.meta.status_code)){
+                    selection->CompleteFailure(latency);
+                }else{
+                    selection->CompleteSuccess(latency);
+                }
 
                 std::cout<<"request="<<request
-                         <<" selected="<<endpoint->ToString()
+                         <<" selected="<<endpoint.ToString()
                          <<" providers="
                          <<discovered.providers->size();
 
