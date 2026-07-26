@@ -43,6 +43,7 @@ AsterRPC 覆盖了一次 RPC 调用从非阻塞网络 I/O、二进制协议编�
 | 可观测性 | TraceContext、异步日志与方法级 Metrics | ✅ |
 | 服务发现 | 可选的 ZooKeeper 服务注册与发现 | ✅ |
 | 配置中心 | ZooKeeper 全局/服务级配置热更新 | ✅ |
+| 网关 | Descriptor 驱动的 HTTP/JSON → Protobuf RPC | ✅ |
 | 负载均衡 | Round Robin | ✅ |
 | 负载均衡 | P2C-EWMA | ✅ |
 | 可靠性 | 主动健康检查与实例熔断 | ✅ |
@@ -138,6 +139,9 @@ cmake --build build -j
 
 服务注册、动态发现和配置热更新的节点格式与验收步骤见
 [ZooKeeper 文档](docs/ZOOKEEPER.md)。
+
+HTTP JSON 调用、错误码映射与 Gateway 示例见
+[HTTP Gateway 文档](docs/HTTP-GATEWAY.md)。
 
 ## RPC 调用链
 

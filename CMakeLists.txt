@@ -64,6 +64,22 @@ target_link_libraries(minirpc PRIVATE
     nlohmann_json::nlohmann_json
 )
 
+add_library(minirpc_gateway
+    src/gateway/HttpGatewayServer.cpp
+    src/gateway/HttpMessage.cpp
+    src/gateway/ProtobufHttpGateway.cpp
+)
+target_include_directories(minirpc_gateway PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_link_libraries(minirpc_gateway
+    PUBLIC
+        minirpc
+        protobuf::libprotobuf
+    PRIVATE
+        nlohmann_json::nlohmann_json
+)
+
 if(MINIRPC_WITH_ZOOKEEPER)
     find_path(
         ZOOKEEPER_INCLUDE_DIR
@@ -111,6 +127,25 @@ if(MINIRPC_WITH_ZOOKEEPER)
 endif()
 
 add_subdirectory(examples/services/calculator)
+
+if(MINIRPC_WITH_ZOOKEEPER)
+    add_executable(http_gateway
+        examples/gateway/http_gateway.cpp
+    )
+    target_link_libraries(http_gateway PRIVATE
+        calculator_proto
+        minirpc_gateway
+        minirpc_zookeeper
+    )
+
+    add_executable(gateway_calculator_server
+        examples/gateway/gateway_calculator_server.cpp
+    )
+    target_link_libraries(gateway_calculator_server PRIVATE
+        calculator_rpc
+        minirpc_zookeeper
+    )
+endif()
 
 add_executable(async_logger_demo
     examples/logging/async_logger_demo.cpp
@@ -193,6 +228,9 @@ add_executable(test_trace_context
 add_executable(test_rpc_config
     tests/config/test_rpc_config.cpp
 )
+add_executable(test_http_gateway
+    tests/gateway/test_http_gateway.cpp
+)
 if(MINIRPC_WITH_ZOOKEEPER)
     add_executable(test_zookeeper_registry
         tests/registry/test_zookeeper_registry.cpp
@@ -250,6 +288,10 @@ target_link_libraries(test_trace_context PRIVATE
 target_link_libraries(test_rpc_config PRIVATE
     minirpc
 )
+target_link_libraries(test_http_gateway PRIVATE
+    calculator_proto
+    minirpc_gateway
+)
 if(MINIRPC_WITH_ZOOKEEPER)
     target_link_libraries(test_zookeeper_registry PRIVATE
         minirpc_zookeeper
@@ -274,6 +316,7 @@ add_test(NAME test_health_checker COMMAND test_health_checker)
 add_test(NAME test_rpc_metrics COMMAND test_rpc_metrics)
 add_test(NAME test_trace_context COMMAND test_trace_context)
 add_test(NAME test_rpc_config COMMAND test_rpc_config)
+add_test(NAME test_http_gateway COMMAND test_http_gateway)
 if(MINIRPC_WITH_ZOOKEEPER)
     add_test(
         NAME test_zookeeper_registry

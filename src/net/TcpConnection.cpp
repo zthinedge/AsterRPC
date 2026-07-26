@@ -10,6 +10,8 @@ TcpConnection::TcpConnection(EventLoop*loop,Socket socket)
     :loop_(loop),
      socket_(std::move(socket)),
      channel_(loop,socket_.GetFd()),
+     lifetime_token_(std::make_shared<const int>(0)),
+     close_after_write_(false),
      closed_(false){
 
     channel_.SetReadCallback([this](){
@@ -85,6 +87,17 @@ void TcpConnection::Send(const std::string& data){
     }
 }
 
+void TcpConnection::Shutdown(){
+    if(closed_){
+        return;
+    }
+    if(output_buffer_.ReadableBytes()==0){
+        HandleClose();
+        return;
+    }
+    close_after_write_=true;
+}
+
 void TcpConnection::Close(){
     HandleClose();
 }
@@ -99,6 +112,11 @@ void TcpConnection::SetCloseCallback(CloseCallback cb){
 
 int TcpConnection::Fd()const noexcept{
     return socket_.GetFd();
+}
+
+std::weak_ptr<const int>
+TcpConnection::LifetimeToken()const noexcept{
+    return lifetime_token_;
 }
 //将内核缓冲区数据加到input_buffer
 void TcpConnection::HandleRead(){
@@ -169,6 +187,9 @@ void TcpConnection::HandleWrite(){
     }
 
     channel_.DisableWriting();
+    if(close_after_write_){
+        HandleClose();
+    }
 }
 
 void TcpConnection::HandleClose(){

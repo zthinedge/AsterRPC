@@ -5,6 +5,7 @@
 #include "minirpc/net/Socket.h"
 
 #include <functional>
+#include <memory>
 #include <string>
 
 namespace minirpc::net{
@@ -24,12 +25,14 @@ public:
 
     void Start();
     void Send(const std::string& data);
+    void Shutdown();
     void Close();
 
     void SetMessageCallback(MessageCallback cb);
     void SetCloseCallback(CloseCallback cb);
 
     int Fd()const noexcept;
+    std::weak_ptr<const int> LifetimeToken()const noexcept;
 
 private:
     void HandleRead();
@@ -45,6 +48,8 @@ private:
 
     MessageCallback message_callback_;
     CloseCallback close_callback_;
+    std::shared_ptr<const int> lifetime_token_;
+    bool close_after_write_;
     bool closed_;
 };
 
