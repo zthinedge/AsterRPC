@@ -11,6 +11,7 @@ class ServiceDescriptor;
 
 namespace minirpc::gateway{
 
+class AdminDataSource;
 class RpcChannel;
 
 }
@@ -39,6 +40,7 @@ public:
     void RegisterService(
         const google::protobuf::ServiceDescriptor* service
     );
+    void SetAdminDataSource(AdminDataSource* data_source);
     void Start();
 
 private:

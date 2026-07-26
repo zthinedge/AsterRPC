@@ -7,6 +7,7 @@
 #include <memory>
 #include <mutex>
 #include <unordered_map>
+#include <vector>
 
 namespace minirpc::net{
 class EventLoop;
@@ -29,6 +30,8 @@ public:
 
     bool Remove(const Endpoint& endpoint);
     std::size_t Size()const;
+    std::vector<std::shared_ptr<ConnectionPool>>
+    Snapshot()const;
 
 private:
     net::EventLoop* loop_;

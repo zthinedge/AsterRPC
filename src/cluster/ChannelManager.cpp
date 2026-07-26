@@ -51,4 +51,15 @@ std::size_t ChannelManager::Size()const{
     return pools_.size();
 }
 
+std::vector<std::shared_ptr<ConnectionPool>>
+ChannelManager::Snapshot()const{
+    std::vector<std::shared_ptr<ConnectionPool>> pools;
+    std::lock_guard<std::mutex> lock(mutex_);
+    pools.reserve(pools_.size());
+    for(const auto& entry:pools_){
+        pools.push_back(entry.second);
+    }
+    return pools;
+}
+
 }

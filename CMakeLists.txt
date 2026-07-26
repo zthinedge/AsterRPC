@@ -65,6 +65,8 @@ target_link_libraries(minirpc PRIVATE
 )
 
 add_library(minirpc_gateway
+    src/gateway/AdminApi.cpp
+    src/gateway/AdminPage.cpp
     src/gateway/HttpGatewayServer.cpp
     src/gateway/HttpMessage.cpp
     src/gateway/ProtobufHttpGateway.cpp
@@ -130,6 +132,7 @@ add_subdirectory(examples/services/calculator)
 
 if(MINIRPC_WITH_ZOOKEEPER)
     add_executable(http_gateway
+        examples/gateway/GatewayRuntime.cpp
         examples/gateway/http_gateway.cpp
     )
     target_link_libraries(http_gateway PRIVATE

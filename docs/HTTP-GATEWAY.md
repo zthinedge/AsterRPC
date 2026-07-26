@@ -80,10 +80,57 @@ X-Trace-Id: demo-trace-001
 ```
 
 Gateway 通过 ZooKeeper 查找
-`minirpc.example.calculator.CalculatorService` 的 Provider，再使用
-RoundRobin 选择实例和 `ChannelManager` 复用连接池。客户端未提供
+`minirpc.example.calculator.CalculatorService` 的 Provider，根据配置中心
+选择 RoundRobin 或 P2C-EWMA，并使用 `ChannelManager` 复用连接池。
+客户端未提供
 `X-Trace-Id` 时自动生成；提供合法值时沿用该值。Gateway 日志与 RPC
 服务端日志可以通过相同的 `trace_id` 串联。
+
+## 管理 API
+
+Gateway 同一监听端口提供只读管理 API：
+
+| 路由 | 内容 |
+|---|---|
+| `GET /admin/api/services` | 已注册的 Protobuf 服务和方法 |
+| `GET /admin/api/instances` | ZooKeeper 实例、连接池及 P2C 健康状态 |
+| `GET /admin/api/metrics` | Endpoint 和方法级 RPC Metrics |
+| `GET /admin/api/config` | 配置中心当前生效的服务配置 |
+| `GET /admin/api/traces` | 最近 256 条网关 RPC 调用 |
+| `GET /admin/api/health` | Gateway、ZooKeeper、服务发现就绪状态 |
+
+例如：
+
+```bash
+curl -s http://127.0.0.1:8080/admin/api/services
+curl -s http://127.0.0.1:8080/admin/api/instances
+curl -s http://127.0.0.1:8080/admin/api/metrics
+curl -s http://127.0.0.1:8080/admin/api/config
+curl -s http://127.0.0.1:8080/admin/api/traces
+curl -i http://127.0.0.1:8080/admin/api/health
+```
+
+管理接口只读取不可变快照或原子计数，不清空 Metrics。`health` 在
+ZooKeeper 未连接、服务发现未就绪、没有 Provider 或没有可选实例时返回
+HTTP 503，其余接口正常返回 HTTP 200。当前版本未增加鉴权，因此只应绑定
+在可信网络；生产环境应在反向代理或 Gateway 中加入认证和访问控制。
+
+## 管理页面
+
+启动 Gateway 后访问：
+
+```text
+http://127.0.0.1:8080/admin
+```
+
+这是 Gateway 内置的单页静态 HTML，不依赖 Node.js、前端框架或外部 CDN。
+页面展示服务与方法、服务实例、健康状态、QPS、P50/P95/P99、inflight、
+超时、重试数和最近 Trace。默认每 2 秒刷新，也可以切换为 5 秒、10 秒或
+暂停，并支持手动刷新。
+
+QPS 由浏览器根据相邻两次 Metrics 累计请求数的差值计算；延迟分位数在
+Endpoint 表中分别展示，顶部摘要取所有 Endpoint 的最大值，避免低估慢
+节点。页面和 API 使用同源请求，因此不需要额外配置 CORS。
 
 ## 错误映射
 
@@ -105,4 +152,3 @@ RoundRobin 选择实例和 `ChannelManager` 复用连接池。客户端未提供
 第一版每个 HTTP 连接处理一个请求，响应发送完毕后关闭连接。这样可以在
 当前单 Reactor 网络层上保证异步 RPC 响应不会破坏 HTTP pipeline 的响应
 顺序。后续支持 keep-alive 时，需要为每条连接增加请求序号和有序响应队列。
-

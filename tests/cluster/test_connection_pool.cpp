@@ -230,6 +230,9 @@ void TestChannelManagerReusesEndpoint(){
     assert(first==second);
     assert(manager.Size()==1);
     assert(manager.Find(endpoint)==first);
+    auto snapshot=manager.Snapshot();
+    assert(snapshot.size()==1);
+    assert(snapshot.front()==first);
 
     cluster::ConnectionPoolOptions different=options;
     different.max_connections=3;
@@ -242,6 +245,7 @@ void TestChannelManagerReusesEndpoint(){
     assert(rejected);
     assert(manager.Remove(endpoint));
     assert(manager.Size()==0);
+    assert(manager.Snapshot().empty());
 }
 
 void TestConnectionFailureIsExplicit(){

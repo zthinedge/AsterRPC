@@ -1,0 +1,666 @@
+#include "AdminPage.h"
+
+namespace minirpc::gateway{
+
+std::string_view AdminPageHtml()noexcept{
+    static constexpr std::string_view html=R"ASTERHTML(<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AsterRPC 管理页面</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #09111f;
+      --panel: #111c2e;
+      --panel-2: #16243a;
+      --line: #263751;
+      --text: #edf4ff;
+      --muted: #8fa3bd;
+      --blue: #5ba7ff;
+      --cyan: #43d9c4;
+      --green: #55d98b;
+      --yellow: #f4c95d;
+      --red: #ff6b7a;
+      --shadow: 0 18px 50px rgba(0, 0, 0, .22);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      background:
+        radial-gradient(circle at 15% -10%, rgba(91, 167, 255, .14), transparent 30%),
+        radial-gradient(circle at 90% 0%, rgba(67, 217, 196, .09), transparent 26%),
+        var(--bg);
+      color: var(--text);
+      font: 14px/1.5 Inter, ui-sans-serif, system-ui, -apple-system,
+            BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button, select { font: inherit; }
+
+    .shell {
+      width: min(1480px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 34px 0 60px;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 26px;
+    }
+
+    .eyebrow {
+      margin-bottom: 7px;
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 44px);
+      letter-spacing: -.04em;
+      line-height: 1.08;
+    }
+
+    .subtitle {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .control {
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      color: var(--text);
+      padding: 0 12px;
+    }
+
+    button.control {
+      cursor: pointer;
+      transition: border-color .15s, transform .15s;
+    }
+
+    button.control:hover {
+      border-color: var(--blue);
+      transform: translateY(-1px);
+    }
+
+    .refresh-meta {
+      width: 100%;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+    }
+
+    .banner {
+      display: none;
+      margin-bottom: 18px;
+      border: 1px solid rgba(255, 107, 122, .45);
+      border-radius: 12px;
+      background: rgba(255, 107, 122, .1);
+      color: #ffc4ca;
+      padding: 11px 14px;
+    }
+
+    .banner.visible { display: block; }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .metric-card, .panel {
+      border: 1px solid var(--line);
+      background: linear-gradient(145deg, rgba(22, 36, 58, .92), rgba(14, 25, 42, .96));
+      box-shadow: var(--shadow);
+    }
+
+    .metric-card {
+      min-height: 118px;
+      border-radius: 14px;
+      padding: 17px;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      margin-top: 12px;
+      font-size: 28px;
+      font-weight: 760;
+      letter-spacing: -.03em;
+      line-height: 1;
+    }
+
+    .metric-note {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .good { color: var(--green); }
+    .warn { color: var(--yellow); }
+    .bad { color: var(--red); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .panel {
+      grid-column: span 6;
+      min-width: 0;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .panel.wide { grid-column: span 12; }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 17px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .panel-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 720;
+    }
+
+    .count {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      padding: 2px 9px;
+      font-size: 12px;
+    }
+
+    .panel-body { padding: 8px 18px 18px; }
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      white-space: nowrap;
+    }
+
+    th, td {
+      padding: 12px 10px;
+      border-bottom: 1px solid rgba(38, 55, 81, .7);
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: rgba(91, 167, 255, .035); }
+
+    code {
+      color: #c7dcff;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(9, 17, 31, .45);
+      padding: 3px 8px;
+      font-size: 12px;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 12px currentColor;
+    }
+
+    .service {
+      margin-top: 10px;
+      border: 1px solid rgba(38, 55, 81, .78);
+      border-radius: 12px;
+      background: rgba(9, 17, 31, .28);
+      padding: 13px;
+    }
+
+    .service-name {
+      overflow-wrap: anywhere;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 13px;
+    }
+
+    .methods {
+      display: flex;
+      gap: 7px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .method {
+      border-radius: 7px;
+      background: rgba(91, 167, 255, .1);
+      color: #9bc8ff;
+      padding: 3px 8px;
+      font-size: 12px;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 24px 8px 12px;
+      text-align: center;
+    }
+
+    @media (max-width: 1100px) {
+      .summary { grid-template-columns: repeat(3, 1fr); }
+      .panel { grid-column: span 12; }
+    }
+
+    @media (max-width: 680px) {
+      .shell { width: min(100% - 24px, 1480px); padding-top: 22px; }
+      header { flex-direction: column; }
+      .toolbar { justify-content: flex-start; width: 100%; }
+      .refresh-meta { text-align: left; }
+      .summary { grid-template-columns: repeat(2, 1fr); }
+      .metric-card { min-height: 106px; }
+      .metric-value { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <div class="eyebrow">Control plane</div>
+        <h1>AsterRPC 管理页面</h1>
+        <p class="subtitle">服务发现、健康状态和 RPC 运行指标的实时快照</p>
+      </div>
+      <div class="toolbar">
+        <select id="interval" class="control" aria-label="自动刷新间隔">
+          <option value="2000">每 2 秒刷新</option>
+          <option value="5000">每 5 秒刷新</option>
+          <option value="10000">每 10 秒刷新</option>
+          <option value="0">暂停刷新</option>
+        </select>
+        <button id="refresh" class="control" type="button">立即刷新</button>
+        <div id="refresh-meta" class="refresh-meta">等待首次刷新</div>
+      </div>
+    </header>
+
+    <div id="error" class="banner" role="alert"></div>
+
+    <section class="summary" aria-label="核心指标">
+      <article class="metric-card">
+        <div class="metric-label">健康状态</div>
+        <div id="health-value" class="metric-value">—</div>
+        <div id="health-note" class="metric-note">等待数据</div>
+      </article>
+      <article class="metric-card">
+        <div class="metric-label">QPS</div>
+        <div id="qps" class="metric-value">—</div>
+        <div class="metric-note">基于刷新间隔计算</div>
+      </article>
+      <article class="metric-card">
+        <div class="metric-label">Inflight</div>
+        <div id="inflight" class="metric-value">0</div>
+        <div class="metric-note">当前在途 RPC 请求</div>
+      </article>
+      <article class="metric-card">
+        <div class="metric-label">P50 / P95 / P99</div>
+        <div id="latency" class="metric-value">—</div>
+        <div class="metric-note">μs，所有 Endpoint 最大值</div>
+      </article>
+      <article class="metric-card">
+        <div class="metric-label">超时</div>
+        <div id="timeouts" class="metric-value">0</div>
+        <div class="metric-note">累计 timeout_requests</div>
+      </article>
+      <article class="metric-card">
+        <div class="metric-label">重试</div>
+        <div id="retries" class="metric-value">0</div>
+        <div class="metric-note">累计 retry attempts</div>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">服务与方法</h2>
+          <span id="services-count" class="count">0</span>
+        </div>
+        <div id="services" class="panel-body"></div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">服务实例</h2>
+          <span id="instances-count" class="count">0</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Endpoint</th>
+                <th>健康</th>
+                <th>连接</th>
+                <th>Inflight</th>
+                <th>EWMA</th>
+              </tr>
+            </thead>
+            <tbody id="instances"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel wide">
+        <div class="panel-head">
+          <h2 class="panel-title">Endpoint 指标</h2>
+          <span id="metrics-count" class="count">0</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Endpoint</th>
+                <th>请求</th>
+                <th>成功</th>
+                <th>失败</th>
+                <th>QPS</th>
+                <th>P50 μs</th>
+                <th>P95 μs</th>
+                <th>P99 μs</th>
+                <th>Inflight</th>
+                <th>超时</th>
+                <th>重试</th>
+              </tr>
+            </thead>
+            <tbody id="metrics"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel wide">
+        <div class="panel-head">
+          <h2 class="panel-title">最近 Trace</h2>
+          <span id="traces-count" class="count">0</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Trace ID</th>
+                <th>调用</th>
+                <th>Endpoint</th>
+                <th>状态</th>
+                <th>耗时 μs</th>
+                <th>开始时间</th>
+              </tr>
+            </thead>
+            <tbody id="traces"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      timer: null,
+      refreshing: false,
+      previousAt: 0,
+      previousTotal: null,
+      previousEndpoints: new Map()
+    };
+
+    const byId = id => document.getElementById(id);
+    const number = value => new Intl.NumberFormat("zh-CN").format(value || 0);
+    const fixed = value => Number.isFinite(value) ? value.toFixed(1) : "—";
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function statusClass(status) {
+      if (status === "healthy" || status === "ok" || status === "ready") return "good";
+      if (status === "suspect" || status === "half_open") return "warn";
+      return "bad";
+    }
+
+    function badge(status) {
+      return `<span class="badge ${statusClass(status)}"><span class="dot"></span>${escapeHtml(status)}</span>`;
+    }
+
+    async function getJson(path, allowError = false) {
+      const response = await fetch(path, {
+        cache: "no-store",
+        headers: { "Accept": "application/json" }
+      });
+      const data = await response.json();
+      if (!response.ok && !allowError) {
+        throw new Error(data.message || `${path} 返回 HTTP ${response.status}`);
+      }
+      return data;
+    }
+
+    function renderServices(data) {
+      const services = data.services || [];
+      byId("services-count").textContent = services.length;
+      byId("services").innerHTML = services.length
+        ? services.map(service => `
+          <div class="service">
+            <div class="service-name">${escapeHtml(service.name)}</div>
+            <div class="methods">
+              ${(service.methods || []).map(method =>
+                `<span class="method">${escapeHtml(method)}</span>`
+              ).join("") || '<span class="method">无方法</span>'}
+            </div>
+          </div>`).join("")
+        : '<div class="empty">暂无已注册服务</div>';
+    }
+
+    function renderInstances(data) {
+      const instances = data.instances || [];
+      byId("instances-count").textContent = instances.length;
+      byId("instances").innerHTML = instances.length
+        ? instances.map(instance => {
+            const health = instance.health;
+            const status = health?.status || instance.discovery_status || "unknown";
+            return `<tr>
+              <td><code>${escapeHtml(instance.endpoint)}</code></td>
+              <td>${badge(status)}</td>
+              <td>${number(instance.pool?.connected)} / ${number(instance.pool?.connections)}</td>
+              <td>${number(instance.pool?.inflight)}</td>
+              <td>${health ? fixed(health.ewma_latency_us) + " μs" : "—"}</td>
+            </tr>`;
+          }).join("")
+        : '<tr><td colspan="5" class="empty">当前没有服务实例</td></tr>';
+    }
+
+    function endpointQps(endpoint, total, now) {
+      const previous = state.previousEndpoints.get(endpoint);
+      if (!previous || now <= previous.at) return "—";
+      return fixed(Math.max(0, total - previous.total) / ((now - previous.at) / 1000));
+    }
+
+    function renderMetrics(data, now) {
+      const endpoints = data.endpoints || [];
+      let total = 0;
+      let inflight = 0;
+      let timeouts = 0;
+      let retries = 0;
+      let p50 = 0;
+      let p95 = 0;
+      let p99 = 0;
+      const nextEndpoints = new Map();
+
+      byId("metrics-count").textContent = endpoints.length;
+      byId("metrics").innerHTML = endpoints.length
+        ? endpoints.map(endpoint => {
+            const metrics = endpoint.metrics || {};
+            const requests = Number(metrics.total_requests || 0);
+            total += requests;
+            inflight += Number(metrics.inflight_requests || 0);
+            timeouts += Number(metrics.timeout_requests || 0);
+            retries += Number(metrics.retries || 0);
+            p50 = Math.max(p50, Number(metrics.p50_latency_us || 0));
+            p95 = Math.max(p95, Number(metrics.p95_latency_us || 0));
+            p99 = Math.max(p99, Number(metrics.p99_latency_us || 0));
+            const qps = endpointQps(endpoint.endpoint, requests, now);
+            nextEndpoints.set(endpoint.endpoint, { total: requests, at: now });
+            return `<tr>
+              <td><code>${escapeHtml(endpoint.endpoint)}</code></td>
+              <td>${number(requests)}</td>
+              <td>${number(metrics.successful_requests)}</td>
+              <td>${number(metrics.failed_requests)}</td>
+              <td>${qps}</td>
+              <td>${number(metrics.p50_latency_us)}</td>
+              <td>${number(metrics.p95_latency_us)}</td>
+              <td>${number(metrics.p99_latency_us)}</td>
+              <td>${number(metrics.inflight_requests)}</td>
+              <td>${number(metrics.timeout_requests)}</td>
+              <td>${number(metrics.retries)}</td>
+            </tr>`;
+          }).join("")
+        : '<tr><td colspan="11" class="empty">尚未建立 RPC 连接</td></tr>';
+
+      let qps = "—";
+      if (state.previousTotal !== null && now > state.previousAt) {
+        qps = fixed(Math.max(0, total - state.previousTotal) / ((now - state.previousAt) / 1000));
+      }
+      byId("qps").textContent = qps;
+      byId("inflight").textContent = number(inflight);
+      byId("timeouts").textContent = number(timeouts);
+      byId("retries").textContent = number(retries);
+      byId("latency").textContent = endpoints.length
+        ? `${number(p50)} / ${number(p95)} / ${number(p99)}`
+        : "—";
+
+      state.previousTotal = total;
+      state.previousAt = now;
+      state.previousEndpoints = nextEndpoints;
+    }
+
+    function renderHealth(data) {
+      const ready = data.status === "ready";
+      const value = byId("health-value");
+      value.textContent = ready ? "READY" : "NOT READY";
+      value.className = `metric-value ${ready ? "good" : "bad"}`;
+      byId("health-note").textContent =
+        `ZooKeeper ${data.zookeeper_connected ? "已连接" : "未连接"} · ` +
+        `${number(data.selectable_instances)} / ${number(data.instances)} 实例可选`;
+    }
+
+    function renderTraces(data) {
+      const traces = data.traces || [];
+      byId("traces-count").textContent = traces.length;
+      byId("traces").innerHTML = traces.length
+        ? traces.map(trace => `<tr>
+            <td><code>${escapeHtml(trace.trace_id)}</code></td>
+            <td>${escapeHtml(trace.service)}.<strong>${escapeHtml(trace.method)}</strong></td>
+            <td><code>${escapeHtml(trace.endpoint || "—")}</code></td>
+            <td>${badge(trace.status)}</td>
+            <td>${number(trace.latency_us)}</td>
+            <td>${trace.started_at_us
+              ? new Date(Number(trace.started_at_us) / 1000).toLocaleTimeString("zh-CN")
+              : "—"}</td>
+          </tr>`).join("")
+        : '<tr><td colspan="6" class="empty">暂无调用 Trace</td></tr>';
+    }
+
+    async function refresh() {
+      if (state.refreshing) return;
+      state.refreshing = true;
+      byId("refresh").disabled = true;
+      try {
+        const [services, instances, metrics, traces, health] = await Promise.all([
+          getJson("/admin/api/services"),
+          getJson("/admin/api/instances"),
+          getJson("/admin/api/metrics"),
+          getJson("/admin/api/traces"),
+          getJson("/admin/api/health", true)
+        ]);
+        const now = Date.now();
+        renderServices(services);
+        renderInstances(instances);
+        renderMetrics(metrics, now);
+        renderTraces(traces);
+        renderHealth(health);
+        byId("error").classList.remove("visible");
+        byId("refresh-meta").textContent =
+          `最后更新 ${new Date(now).toLocaleTimeString("zh-CN")}`;
+      } catch (error) {
+        byId("error").textContent = `刷新失败：${error.message}`;
+        byId("error").classList.add("visible");
+        byId("refresh-meta").textContent = "数据刷新失败";
+      } finally {
+        state.refreshing = false;
+        byId("refresh").disabled = false;
+      }
+    }
+
+    function schedule() {
+      if (state.timer) clearInterval(state.timer);
+      const interval = Number(byId("interval").value);
+      state.timer = interval > 0 ? setInterval(refresh, interval) : null;
+    }
+
+    byId("refresh").addEventListener("click", refresh);
+    byId("interval").addEventListener("change", schedule);
+    schedule();
+    refresh();
+  </script>
+</body>
+</html>
+)ASTERHTML";
+    return html;
+}
+
+}

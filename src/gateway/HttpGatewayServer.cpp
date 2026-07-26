@@ -1,5 +1,6 @@
 #include "minirpc/gateway/HttpGatewayServer.h"
 
+#include "minirpc/gateway/AdminApi.h"
 #include "minirpc/gateway/RpcChannel.h"
 #include "minirpc/net/Buffer.h"
 #include "minirpc/net/EventLoop.h"
@@ -45,6 +46,15 @@ public:
         const google::protobuf::ServiceDescriptor* service
     ){
         gateway_.RegisterService(service);
+    }
+
+    void SetAdminDataSource(AdminDataSource* data_source){
+        if(started_){
+            throw std::logic_error(
+                "admin data source must be set before start"
+            );
+        }
+        admin_api_=std::make_unique<AdminApi>(data_source);
     }
 
     void Start(){
@@ -102,6 +112,14 @@ private:
             return;
         }
 
+        if(admin_api_!=nullptr&&AdminApi::Matches(request.target)){
+            SendResponse(
+                connection,
+                admin_api_->Handle(request)
+            );
+            return;
+        }
+
         std::weak_ptr<State> weak=shared_from_this();
         std::weak_ptr<const int> connection_lifetime=
             connection->LifetimeToken();
@@ -146,6 +164,7 @@ private:
     net::EventLoop* loop_;
     net::TcpServer server_;
     ProtobufHttpGateway gateway_;
+    std::unique_ptr<AdminApi> admin_api_;
     HttpParserLimits parser_limits_;
     bool started_=false;
 };
@@ -170,6 +189,12 @@ void HttpGatewayServer::RegisterService(
     const google::protobuf::ServiceDescriptor* service
 ){
     state_->RegisterService(service);
+}
+
+void HttpGatewayServer::SetAdminDataSource(
+    AdminDataSource* data_source
+){
+    state_->SetAdminDataSource(data_source);
 }
 
 void HttpGatewayServer::Start(){

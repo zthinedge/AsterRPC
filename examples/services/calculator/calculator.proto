@@ -12,5 +12,7 @@ message AddResponse {
 }
 
 service CalculatorService {
-    rpc Add(AddRequest) returns (AddResponse);
+    rpc Add(AddRequest) returns (AddResponse) {
+        option idempotency_level = IDEMPOTENT;
+    }
 }

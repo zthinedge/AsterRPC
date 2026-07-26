@@ -5,6 +5,7 @@
 #include "minirpc/trace/TraceContext.h"
 
 #include <google/protobuf/descriptor.h>
+#include <google/protobuf/descriptor.pb.h>
 #include <google/protobuf/dynamic_message.h>
 #include <google/protobuf/message.h>
 #include <google/protobuf/util/json_util.h>
@@ -357,6 +358,14 @@ public:
 
         rpc::CallOptions call_options;
         call_options.timeout=options_.default_timeout;
+        auto idempotency=method->options().idempotency_level();
+        call_options.idempotent=
+            idempotency==
+                google::protobuf::MethodOptions::
+                    IDEMPOTENT||
+            idempotency==
+                google::protobuf::MethodOptions::
+                    NO_SIDE_EFFECTS;
         trace::TraceScope trace_scope(request_trace);
 
         try{
