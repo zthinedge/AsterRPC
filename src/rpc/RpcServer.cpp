@@ -3,6 +3,7 @@
 #include "minirpc/health/HealthService.h"
 #include "minirpc/net/Buffer.h"
 #include "minirpc/net/TcpConnection.h"
+#include "minirpc/trace/TraceContext.h"
 
 #include <chrono>
 #include <utility>
@@ -33,6 +34,16 @@ protocol::RpcMessage MakeTimeoutResponse(
     response.meta.status_code=protocol::RpcError::Timeout;
     response.meta.error_text="rpc request deadline exceeded";
     return response;
+}
+
+void SetResponseTrace(
+    protocol::RpcMessage* response,
+    const trace::TraceContext& context
+){
+    response->meta.trace_id=context.trace_id;
+    response->meta.span_id=context.span_id;
+    response->meta.parent_span_id=context.parent_span_id;
+    response->meta.deadline_us=context.deadline_us;
 }
 
 }
@@ -75,6 +86,18 @@ metrics::RpcMetricsSnapshot RpcServer::GetMetrics()const noexcept{
     return metrics_.Snapshot();
 }
 
+metrics::RpcMetricsSnapshot RpcServer::GetMethodMetrics(
+    std::string_view service_name,
+    std::string_view method_name
+)const noexcept{
+    return metrics_.MethodSnapshot(service_name,method_name);
+}
+
+std::vector<metrics::RpcMethodMetricsSnapshot>
+RpcServer::GetAllMethodMetrics()const{
+    return metrics_.MethodSnapshots();
+}
+
 void RpcServer::HandleMessage(
     net::TcpConnection* connection,
     net::Buffer* buffer
@@ -100,11 +123,24 @@ void RpcServer::HandleMessage(
         }
 
         auto started_at=metrics::RpcMetrics::Clock::now();
-        metrics_.RequestStarted();
+        metrics_.RequestStarted(
+            request.meta.service_name,
+            request.meta.method_name
+        );
+
+        trace::TraceContext server_span=trace::CreateServerSpan(
+            request.meta.trace_id,
+            request.meta.span_id,
+            request.meta.deadline_us
+        );
+        trace::TraceScope trace_scope(server_span);
 
         if(IsExpired(request)){
             protocol::RpcMessage response=MakeTimeoutResponse(request);
+            SetResponseTrace(&response,server_span);
             metrics_.RequestFinished(
+                request.meta.service_name,
+                request.meta.method_name,
                 response.meta.status_code,
                 started_at
             );
@@ -113,7 +149,10 @@ void RpcServer::HandleMessage(
         }
 
         protocol::RpcMessage response=dispatcher_.Dispatch(request);
+        SetResponseTrace(&response,server_span);
         metrics_.RequestFinished(
+            request.meta.service_name,
+            request.meta.method_name,
             response.meta.status_code,
             started_at
         );

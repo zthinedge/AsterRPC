@@ -3,6 +3,7 @@
 #include "minirpc/log/LogLevel.h"
 
 #include <chrono>
+#include <cstdint>
 #include <string>
 #include <thread>
 
@@ -16,6 +17,10 @@ struct LogRecord{
     int line=0;
     std::string function;
     std::string message;
+    std::string trace_id;
+    std::string span_id;
+    std::string parent_span_id;
+    std::uint64_t deadline_us=0;
 };
 
 }

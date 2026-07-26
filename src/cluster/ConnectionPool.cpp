@@ -3,6 +3,7 @@
 #include "minirpc/net/EventLoop.h"
 #include "minirpc/net/InetAddress.h"
 #include "minirpc/rpc/RpcClient.h"
+#include "minirpc/trace/TraceContext.h"
 
 #include <algorithm>
 #include <atomic>
@@ -11,6 +12,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -158,8 +160,23 @@ public:
         state->call_options.max_retries=0;
         state->retry_policy=std::move(retry_policy);
         state->completion=std::move(completion);
+        const trace::TraceContext* current=
+            trace::CurrentTraceContext();
+        if(current!=nullptr){
+            state->parent_trace=*current;
+            if(current->deadline_us!=0&&
+               (state->call_options.deadline_us==0||
+                current->deadline_us<
+                    state->call_options.deadline_us)){
+                state->call_options.deadline_us=
+                    current->deadline_us;
+            }
+        }
         state->started_at=metrics::RpcMetrics::Clock::now();
-        metrics_.RequestStarted();
+        metrics_.RequestStarted(
+            state->service_name,
+            state->method_name
+        );
 
         auto self=shared_from_this();
         loop_->RunInLoop([self,state](){
@@ -192,6 +209,18 @@ public:
         return metrics_.Snapshot();
     }
 
+    metrics::RpcMetricsSnapshot GetMethodMetrics(
+        std::string_view service_name,
+        std::string_view method_name
+    )const noexcept{
+        return metrics_.MethodSnapshot(service_name,method_name);
+    }
+
+    std::vector<metrics::RpcMethodMetricsSnapshot>
+    GetAllMethodMetrics()const{
+        return metrics_.MethodSnapshots();
+    }
+
     bool IsInLoopThread()const noexcept{
         return loop_->IsInLoopThread();
     }
@@ -211,6 +240,7 @@ private:
         rpc::CallOptions call_options;
         RetryPolicy retry_policy;
         ResponseCallback completion;
+        std::optional<trace::TraceContext> parent_trace;
         std::size_t attempts=0;
         net::EventLoop::TimerId deadline_timer=0;
         metrics::RpcMetrics::TimePoint started_at;
@@ -419,17 +449,28 @@ private:
         auto self=shared_from_this();
 
         try{
-            entry->client->AsyncCall(
-                state->service_name,
-                state->method_name,
-                state->payload,
-                [self,entry_id,state](protocol::RpcMessage response){
-                    self->HandleResponse(
-                        entry_id,state,std::move(response)
-                    );
-                },
-                state->call_options
-            );
+            auto call=[&](){
+                entry->client->AsyncCall(
+                    state->service_name,
+                    state->method_name,
+                    state->payload,
+                    [self,entry_id,state](
+                        protocol::RpcMessage response
+                    ){
+                        self->HandleResponse(
+                            entry_id,state,std::move(response)
+                        );
+                    },
+                    state->call_options
+                );
+            };
+
+            if(state->parent_trace){
+                trace::TraceScope scope(*state->parent_trace);
+                call();
+            }else{
+                call();
+            }
         }catch(const std::exception& error){
             --entry->in_flight;
             in_flight_count_.fetch_sub(1,std::memory_order_relaxed);
@@ -514,7 +555,10 @@ private:
         }
 
         retry_count_.fetch_add(1,std::memory_order_relaxed);
-        metrics_.RetryStarted();
+        metrics_.RetryStarted(
+            state->service_name,
+            state->method_name
+        );
 
         auto self=shared_from_this();
         if(delay==std::chrono::microseconds::zero()){
@@ -543,6 +587,8 @@ private:
             state->deadline_timer=0;
         }
         metrics_.RequestFinished(
+            state->service_name,
+            state->method_name,
             response.meta.status_code,
             state->started_at
         );
@@ -796,6 +842,18 @@ ConnectionPoolStats ConnectionPool::GetStats()const noexcept{
 
 metrics::RpcMetricsSnapshot ConnectionPool::GetMetrics()const noexcept{
     return impl_->GetMetrics();
+}
+
+metrics::RpcMetricsSnapshot ConnectionPool::GetMethodMetrics(
+    std::string_view service_name,
+    std::string_view method_name
+)const noexcept{
+    return impl_->GetMethodMetrics(service_name,method_name);
+}
+
+std::vector<metrics::RpcMethodMetricsSnapshot>
+ConnectionPool::GetAllMethodMetrics()const{
+    return impl_->GetAllMethodMetrics();
 }
 
 }

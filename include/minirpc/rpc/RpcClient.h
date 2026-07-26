@@ -5,12 +5,15 @@
 #include "minirpc/protocol/RpcCodec.h"
 #include "minirpc/rpc/CallOptions.h"
 #include "minirpc/rpc/PendingCalls.h"
+#include "minirpc/trace/TraceContext.h"
 
 #include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
+#include <vector>
 
 namespace minirpc::net{
 class EventLoop;
@@ -59,6 +62,12 @@ public:
 
     bool IsConnected()const noexcept;
     metrics::RpcMetricsSnapshot GetMetrics()const noexcept;
+    metrics::RpcMetricsSnapshot GetMethodMetrics(
+        std::string_view service_name,
+        std::string_view method_name
+    )const noexcept;
+    std::vector<metrics::RpcMethodMetricsSnapshot>
+    GetAllMethodMetrics()const;
 
     void SetConnectionCallback(ConnectionCallback callback);
     void SetCloseCallback(CloseCallback callback);
@@ -74,6 +83,7 @@ private:
         std::uint32_t attempts=0;
         bool idempotent=false;
         bool finished=false;
+        trace::TraceContext trace_context;
         metrics::RpcMetrics::TimePoint started_at;
         ResponseCallback completion;
     };

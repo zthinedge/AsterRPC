@@ -5,6 +5,7 @@
 #include "minirpc/protocol/RpcCodec.h"
 #include "minirpc/rpc/RpcServer.h"
 #include "minirpc/rpc/ServiceDispatcher.h"
+#include "minirpc/trace/TraceContext.h"
 
 #include <arpa/inet.h>
 #include <cassert>
@@ -190,8 +191,14 @@ void TestRpcServer(){
     std::uint16_t port=FindFreePort();
     std::promise<net::EventLoop*>server_ready;
     std::promise<rpc::RpcServer*>rpc_server_ready;
+    std::promise<trace::TraceContext>handler_trace;
 
-    std::thread server_thread([port,&server_ready,&rpc_server_ready](){
+    std::thread server_thread([
+        port,
+        &server_ready,
+        &rpc_server_ready,
+        &handler_trace
+    ](){
         net::EventLoop loop;
         net::InetAddress address("127.0.0.1",port);
         rpc::RpcServer server(&loop,address);
@@ -199,7 +206,11 @@ void TestRpcServer(){
         server.RegisterMethod(
             "EchoService",
             "Echo",
-            [](const std::string& payload){
+            [&handler_trace](const std::string& payload){
+                const trace::TraceContext* context=
+                    trace::CurrentTraceContext();
+                assert(context!=nullptr);
+                handler_trace.set_value(*context);
                 return "reply:"+payload;
             }
         );
@@ -215,9 +226,12 @@ void TestRpcServer(){
     int fd=Connect(port);
 
     protocol::RpcCodec codec;
-    std::string first=codec.Encode(
-        MakeRequest(101,"EchoService","Echo","hello")
-    );
+    protocol::RpcMessage first_request=
+        MakeRequest(101,"EchoService","Echo","hello");
+    first_request.meta.trace_id=
+        "00112233445566778899aabbccddeeff";
+    first_request.meta.span_id="0123456789abcdef";
+    std::string first=codec.Encode(first_request);
     std::string second=codec.Encode(
         MakeRequest(102,"UnknownService","Echo","")
     );
@@ -236,6 +250,15 @@ void TestRpcServer(){
     assert(response.request_id==101);
     assert(response.meta.status_code==protocol::StatusCode::Ok);
     assert(response.payload=="reply:hello");
+    assert(response.meta.trace_id==first_request.meta.trace_id);
+    assert(response.meta.parent_span_id==first_request.meta.span_id);
+    assert(!response.meta.span_id.empty());
+    assert(response.meta.span_id!=first_request.meta.span_id);
+
+    trace::TraceContext observed=handler_trace.get_future().get();
+    assert(observed.trace_id==first_request.meta.trace_id);
+    assert(observed.span_id==response.meta.span_id);
+    assert(observed.parent_span_id==first_request.meta.span_id);
 
     response=ReadOne(fd,&response_buffer);
     assert(response.request_id==102);
@@ -285,6 +308,15 @@ void TestRpcServer(){
     assert(metrics.inflight_requests==0);
     assert(metrics.active_connections==1);
     assert(metrics.latency_samples==5);
+
+    auto echo_metrics=server->GetMethodMetrics(
+        "EchoService",
+        "Echo"
+    );
+    assert(echo_metrics.total_requests==2);
+    assert(echo_metrics.successful_requests==1);
+    assert(echo_metrics.timeout_requests==1);
+    assert(server->GetAllMethodMetrics().size()==4);
 
     std::string invalid=codec.Encode(
         MakeRequest(105,"EchoService","Echo","bad")

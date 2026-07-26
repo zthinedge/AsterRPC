@@ -6,6 +6,7 @@
 #include "minirpc/protocol/RpcCodec.h"
 #include "minirpc/protocol/RpcMessage.h"
 #include "minirpc/rpc/PendingCalls.h"
+#include "minirpc/trace/TraceContext.h"
 #include "minirpc/rpc/RpcClient.h"
 #include "minirpc/rpc/RpcServer.h"
 
@@ -666,6 +667,10 @@ void TestClientTimeout(){
     assert(requests.size()==2);
     assert(requests[0].meta.deadline_us!=0);
     assert(requests[1].meta.deadline_us!=0);
+    assert(!requests[0].meta.trace_id.empty());
+    assert(!requests[0].meta.span_id.empty());
+    assert(!requests[1].meta.trace_id.empty());
+    assert(!requests[1].meta.span_id.empty());
 
     loop->Stop();
     client_thread.join();
@@ -701,12 +706,17 @@ void TestRetrySuccess(){
     options.timeout=std::chrono::milliseconds(500);
     options.max_retries=2;
 
-    protocol::RpcMessage response=client->FutureCall(
-        "RetryService",
-        "Retry",
-        "success after retry",
-        options
-    ).get();
+    trace::TraceContext parent=trace::CreateRootTrace();
+    protocol::RpcMessage response;
+    {
+        trace::TraceScope scope(parent);
+        response=client->FutureCall(
+            "RetryService",
+            "Retry",
+            "success after retry",
+            options
+        ).get();
+    }
 
     assert(response.meta.status_code==protocol::RpcError::Ok);
     assert(response.payload=="success after retry");
@@ -720,6 +730,18 @@ void TestRetrySuccess(){
            requests[1].meta.deadline_us);
     assert(requests[1].meta.deadline_us==
            requests[2].meta.deadline_us);
+    assert(requests[0].meta.trace_id==parent.trace_id);
+    assert(requests[0].meta.parent_span_id==parent.span_id);
+    assert(!requests[0].meta.span_id.empty());
+    assert(requests[0].meta.span_id!=parent.span_id);
+    assert(requests[0].meta.trace_id==
+           requests[1].meta.trace_id);
+    assert(requests[0].meta.trace_id==
+           requests[2].meta.trace_id);
+    assert(requests[0].meta.span_id==
+           requests[1].meta.span_id);
+    assert(requests[0].meta.span_id==
+           requests[2].meta.span_id);
 
     auto metrics=client->GetMetrics();
     assert(metrics.total_requests==1);
@@ -728,6 +750,13 @@ void TestRetrySuccess(){
     assert(metrics.retries==2);
     assert(metrics.inflight_requests==0);
     assert(metrics.latency_samples==1);
+    auto method_metrics=client->GetMethodMetrics(
+        "RetryService",
+        "Retry"
+    );
+    assert(method_metrics.total_requests==1);
+    assert(method_metrics.successful_requests==1);
+    assert(method_metrics.retries==2);
 
     loop->Stop();
     client_thread.join();

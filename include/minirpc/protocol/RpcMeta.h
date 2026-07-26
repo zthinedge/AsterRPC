@@ -25,6 +25,10 @@ struct RpcMeta{
     StatusCode status_code=StatusCode::Ok;
     std::string error_text;
     std::uint64_t deadline_us=0;
+
+    std::string trace_id;
+    std::string span_id;
+    std::string parent_span_id;
 };
 
 }

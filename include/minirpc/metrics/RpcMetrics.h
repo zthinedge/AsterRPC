@@ -7,6 +7,12 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <map>
+#include <mutex>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace minirpc::metrics{
 
@@ -31,12 +37,30 @@ struct RpcMetricsSnapshot{
     double AverageLatencyMicros()const noexcept;
 };
 
+struct RpcMethodMetricsSnapshot{
+    std::string service_name;
+    std::string method_name;
+    RpcMetricsSnapshot metrics;
+};
+
 class RpcMetrics{
 public:
     using Clock=std::chrono::steady_clock;
     using TimePoint=Clock::time_point;
 
+    RpcMetrics();
+    ~RpcMetrics();
+
+    RpcMetrics(const RpcMetrics&)=delete;
+    RpcMetrics& operator=(const RpcMetrics&)=delete;
+    RpcMetrics(RpcMetrics&&)=delete;
+    RpcMetrics& operator=(RpcMetrics&&)=delete;
+
     void RequestStarted()noexcept;
+    void RequestStarted(
+        std::string_view service_name,
+        std::string_view method_name
+    )noexcept;
 
     void RequestFinished(
         protocol::StatusCode status,
@@ -48,27 +72,75 @@ public:
         TimePoint started_at
     )noexcept;
 
+    void RequestFinished(
+        std::string_view service_name,
+        std::string_view method_name,
+        protocol::StatusCode status,
+        std::chrono::microseconds latency
+    )noexcept;
+
+    void RequestFinished(
+        std::string_view service_name,
+        std::string_view method_name,
+        protocol::StatusCode status,
+        TimePoint started_at
+    )noexcept;
+
     void RetryStarted()noexcept;
+    void RetryStarted(
+        std::string_view service_name,
+        std::string_view method_name
+    )noexcept;
+
     void ConnectionOpened()noexcept;
     void ConnectionClosed()noexcept;
 
     RpcMetricsSnapshot Snapshot()const noexcept;
+    RpcMetricsSnapshot MethodSnapshot(
+        std::string_view service_name,
+        std::string_view method_name
+    )const noexcept;
+
+    std::vector<RpcMethodMetricsSnapshot> MethodSnapshots()const;
 
 private:
     static constexpr std::size_t kBucketCount=19;
 
-    std::atomic_uint64_t total_requests_{0};
-    std::atomic_uint64_t successful_requests_{0};
-    std::atomic_uint64_t failed_requests_{0};
-    std::atomic_uint64_t timeout_requests_{0};
-    std::atomic_uint64_t retries_{0};
-    std::atomic_int64_t inflight_requests_{0};
-    std::atomic_int64_t active_connections_{0};
+    struct Bucket;
+    using MethodMap=
+        std::map<
+            std::string,
+            std::unique_ptr<Bucket>,
+            std::less<>
+        >;
+    using ServiceMap=
+        std::map<std::string,MethodMap,std::less<>>;
 
-    std::atomic_uint64_t latency_samples_{0};
-    std::atomic_uint64_t total_latency_us_{0};
-    std::atomic_uint64_t max_latency_us_{0};
-    std::array<std::atomic_uint64_t,kBucketCount> latency_buckets_{};
+    Bucket* GetOrCreateMethod(
+        std::string_view service_name,
+        std::string_view method_name
+    )noexcept;
+
+    const Bucket* FindMethod(
+        std::string_view service_name,
+        std::string_view method_name
+    )const noexcept;
+    Bucket* FindMethod(
+        std::string_view service_name,
+        std::string_view method_name
+    )noexcept;
+
+    static void Start(Bucket* bucket)noexcept;
+    static void Finish(
+        Bucket* bucket,
+        protocol::StatusCode status,
+        std::chrono::microseconds latency
+    )noexcept;
+    static RpcMetricsSnapshot Read(const Bucket* bucket)noexcept;
+
+    std::unique_ptr<Bucket> totals_;
+    mutable std::mutex methods_mutex_;
+    ServiceMap methods_;
 };
 
 }

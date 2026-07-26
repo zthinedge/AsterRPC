@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <utility>
 
 namespace minirpc::metrics{
 namespace{
@@ -53,16 +54,16 @@ std::uint64_t Percentile(
         ((sample_count%100)*numerator+99)/100;
     std::uint64_t cumulative=0;
 
-    for(std::size_t i=0;i<buckets.size();++i){
-        cumulative+=buckets[i];
+    for(std::size_t index=0;index<buckets.size();++index){
+        cumulative+=buckets[index];
 
         if(cumulative>=rank){
-            if(kLatencyUpperBoundsUs[i]==
+            if(kLatencyUpperBoundsUs[index]==
                std::numeric_limits<std::uint64_t>::max()){
                 return max_latency;
             }
 
-            return kLatencyUpperBoundsUs[i];
+            return kLatencyUpperBoundsUs[index];
         }
     }
 
@@ -70,6 +71,21 @@ std::uint64_t Percentile(
 }
 
 }
+
+struct RpcMetrics::Bucket{
+    std::atomic_uint64_t total_requests{0};
+    std::atomic_uint64_t successful_requests{0};
+    std::atomic_uint64_t failed_requests{0};
+    std::atomic_uint64_t timeout_requests{0};
+    std::atomic_uint64_t retries{0};
+    std::atomic_int64_t inflight_requests{0};
+    std::atomic_int64_t active_connections{0};
+
+    std::atomic_uint64_t latency_samples{0};
+    std::atomic_uint64_t total_latency_us{0};
+    std::atomic_uint64_t max_latency_us{0};
+    std::array<std::atomic_uint64_t,kBucketCount> latency_buckets{};
+};
 
 double RpcMetricsSnapshot::AverageLatencyMicros()const noexcept{
     if(latency_samples==0){
@@ -80,24 +96,44 @@ double RpcMetricsSnapshot::AverageLatencyMicros()const noexcept{
            static_cast<double>(latency_samples);
 }
 
-void RpcMetrics::RequestStarted()noexcept{
-    total_requests_.fetch_add(1,std::memory_order_relaxed);
-    inflight_requests_.fetch_add(1,std::memory_order_relaxed);
+RpcMetrics::RpcMetrics()
+:totals_(std::make_unique<Bucket>()){}
+
+RpcMetrics::~RpcMetrics()=default;
+
+void RpcMetrics::Start(Bucket* bucket)noexcept{
+    if(bucket==nullptr){
+        return;
+    }
+
+    bucket->total_requests.fetch_add(1,std::memory_order_relaxed);
+    bucket->inflight_requests.fetch_add(1,std::memory_order_relaxed);
 }
 
-void RpcMetrics::RequestFinished(
+void RpcMetrics::Finish(
+    Bucket* bucket,
     protocol::StatusCode status,
     std::chrono::microseconds latency
 )noexcept{
-    DecrementGauge(&inflight_requests_);
+    if(bucket==nullptr){
+        return;
+    }
+
+    DecrementGauge(&bucket->inflight_requests);
 
     if(status==protocol::StatusCode::Ok){
-        successful_requests_.fetch_add(1,std::memory_order_relaxed);
+        bucket->successful_requests.fetch_add(
+            1,
+            std::memory_order_relaxed
+        );
     }else{
-        failed_requests_.fetch_add(1,std::memory_order_relaxed);
+        bucket->failed_requests.fetch_add(1,std::memory_order_relaxed);
 
         if(status==protocol::StatusCode::Timeout){
-            timeout_requests_.fetch_add(1,std::memory_order_relaxed);
+            bucket->timeout_requests.fetch_add(
+                1,
+                std::memory_order_relaxed
+            );
         }
     }
 
@@ -105,25 +141,52 @@ void RpcMetrics::RequestFinished(
         ?static_cast<std::uint64_t>(latency.count())
         :0;
 
-    latency_samples_.fetch_add(1,std::memory_order_relaxed);
-    total_latency_us_.fetch_add(latency_us,std::memory_order_relaxed);
-
-    std::uint64_t current=max_latency_us_.load(std::memory_order_relaxed);
-    while(current<latency_us&&!max_latency_us_.compare_exchange_weak(
-        current,
+    bucket->latency_samples.fetch_add(1,std::memory_order_relaxed);
+    bucket->total_latency_us.fetch_add(
         latency_us,
         std::memory_order_relaxed
-    )){}
+    );
 
-    auto bucket=std::lower_bound(
+    std::uint64_t current=
+        bucket->max_latency_us.load(std::memory_order_relaxed);
+    while(current<latency_us&&
+          !bucket->max_latency_us.compare_exchange_weak(
+              current,
+              latency_us,
+              std::memory_order_relaxed
+          )){}
+
+    auto position=std::lower_bound(
         kLatencyUpperBoundsUs.begin(),
         kLatencyUpperBoundsUs.end(),
         latency_us
     );
     std::size_t index=static_cast<std::size_t>(
-        bucket-kLatencyUpperBoundsUs.begin()
+        position-kLatencyUpperBoundsUs.begin()
     );
-    latency_buckets_[index].fetch_add(1,std::memory_order_relaxed);
+    bucket->latency_buckets[index].fetch_add(
+        1,
+        std::memory_order_relaxed
+    );
+}
+
+void RpcMetrics::RequestStarted()noexcept{
+    Start(totals_.get());
+}
+
+void RpcMetrics::RequestStarted(
+    std::string_view service_name,
+    std::string_view method_name
+)noexcept{
+    Start(totals_.get());
+    Start(GetOrCreateMethod(service_name,method_name));
+}
+
+void RpcMetrics::RequestFinished(
+    protocol::StatusCode status,
+    std::chrono::microseconds latency
+)noexcept{
+    Finish(totals_.get(),status,latency);
 }
 
 void RpcMetrics::RequestFinished(
@@ -138,43 +201,89 @@ void RpcMetrics::RequestFinished(
     );
 }
 
+void RpcMetrics::RequestFinished(
+    std::string_view service_name,
+    std::string_view method_name,
+    protocol::StatusCode status,
+    std::chrono::microseconds latency
+)noexcept{
+    Finish(totals_.get(),status,latency);
+    Finish(FindMethod(service_name,method_name),status,latency);
+}
+
+void RpcMetrics::RequestFinished(
+    std::string_view service_name,
+    std::string_view method_name,
+    protocol::StatusCode status,
+    TimePoint started_at
+)noexcept{
+    RequestFinished(
+        service_name,
+        method_name,
+        status,
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            Clock::now()-started_at
+        )
+    );
+}
+
 void RpcMetrics::RetryStarted()noexcept{
-    retries_.fetch_add(1,std::memory_order_relaxed);
+    totals_->retries.fetch_add(1,std::memory_order_relaxed);
+}
+
+void RpcMetrics::RetryStarted(
+    std::string_view service_name,
+    std::string_view method_name
+)noexcept{
+    totals_->retries.fetch_add(1,std::memory_order_relaxed);
+    Bucket* bucket=GetOrCreateMethod(service_name,method_name);
+    if(bucket!=nullptr){
+        bucket->retries.fetch_add(1,std::memory_order_relaxed);
+    }
 }
 
 void RpcMetrics::ConnectionOpened()noexcept{
-    active_connections_.fetch_add(1,std::memory_order_relaxed);
+    totals_->active_connections.fetch_add(
+        1,
+        std::memory_order_relaxed
+    );
 }
 
 void RpcMetrics::ConnectionClosed()noexcept{
-    DecrementGauge(&active_connections_);
+    DecrementGauge(&totals_->active_connections);
 }
 
-RpcMetricsSnapshot RpcMetrics::Snapshot()const noexcept{
+RpcMetricsSnapshot RpcMetrics::Read(const Bucket* bucket)noexcept{
     RpcMetricsSnapshot snapshot;
+    if(bucket==nullptr){
+        return snapshot;
+    }
+
     snapshot.total_requests=
-        total_requests_.load(std::memory_order_relaxed);
+        bucket->total_requests.load(std::memory_order_relaxed);
     snapshot.successful_requests=
-        successful_requests_.load(std::memory_order_relaxed);
+        bucket->successful_requests.load(std::memory_order_relaxed);
     snapshot.failed_requests=
-        failed_requests_.load(std::memory_order_relaxed);
+        bucket->failed_requests.load(std::memory_order_relaxed);
     snapshot.timeout_requests=
-        timeout_requests_.load(std::memory_order_relaxed);
-    snapshot.retries=retries_.load(std::memory_order_relaxed);
+        bucket->timeout_requests.load(std::memory_order_relaxed);
+    snapshot.retries=bucket->retries.load(std::memory_order_relaxed);
     snapshot.inflight_requests=
-        inflight_requests_.load(std::memory_order_relaxed);
+        bucket->inflight_requests.load(std::memory_order_relaxed);
     snapshot.active_connections=
-        active_connections_.load(std::memory_order_relaxed);
+        bucket->active_connections.load(std::memory_order_relaxed);
     snapshot.latency_samples=
-        latency_samples_.load(std::memory_order_relaxed);
+        bucket->latency_samples.load(std::memory_order_relaxed);
     snapshot.total_latency_us=
-        total_latency_us_.load(std::memory_order_relaxed);
+        bucket->total_latency_us.load(std::memory_order_relaxed);
     snapshot.max_latency_us=
-        max_latency_us_.load(std::memory_order_relaxed);
+        bucket->max_latency_us.load(std::memory_order_relaxed);
 
     std::array<std::uint64_t,kBucketCount> buckets;
-    for(std::size_t i=0;i<kBucketCount;++i){
-        buckets[i]=latency_buckets_[i].load(std::memory_order_relaxed);
+    for(std::size_t index=0;index<kBucketCount;++index){
+        buckets[index]=bucket->latency_buckets[index].load(
+            std::memory_order_relaxed
+        );
     }
 
     snapshot.p50_latency_us=Percentile(
@@ -197,6 +306,99 @@ RpcMetricsSnapshot RpcMetrics::Snapshot()const noexcept{
     );
 
     return snapshot;
+}
+
+RpcMetricsSnapshot RpcMetrics::Snapshot()const noexcept{
+    return Read(totals_.get());
+}
+
+RpcMetrics::Bucket* RpcMetrics::GetOrCreateMethod(
+    std::string_view service_name,
+    std::string_view method_name
+)noexcept{
+    if(service_name.empty()||method_name.empty()){
+        return nullptr;
+    }
+
+    try{
+        std::lock_guard<std::mutex> lock(methods_mutex_);
+        auto service=methods_.find(service_name);
+        if(service==methods_.end()){
+            service=methods_.emplace(
+                std::string(service_name),
+                MethodMap{}
+            ).first;
+        }
+
+        auto method=service->second.find(method_name);
+        if(method==service->second.end()){
+            method=service->second.emplace(
+                std::string(method_name),
+                std::make_unique<Bucket>()
+            ).first;
+        }
+
+        return method->second.get();
+    }catch(...){
+        return nullptr;
+    }
+}
+
+const RpcMetrics::Bucket* RpcMetrics::FindMethod(
+    std::string_view service_name,
+    std::string_view method_name
+)const noexcept{
+    try{
+        std::lock_guard<std::mutex> lock(methods_mutex_);
+        auto service=methods_.find(service_name);
+        if(service==methods_.end()){
+            return nullptr;
+        }
+
+        auto method=service->second.find(method_name);
+        return method==service->second.end()
+            ?nullptr
+            :method->second.get();
+    }catch(...){
+        return nullptr;
+    }
+}
+
+RpcMetrics::Bucket* RpcMetrics::FindMethod(
+    std::string_view service_name,
+    std::string_view method_name
+)noexcept{
+    return const_cast<Bucket*>(
+        static_cast<const RpcMetrics*>(this)->FindMethod(
+            service_name,
+            method_name
+        )
+    );
+}
+
+RpcMetricsSnapshot RpcMetrics::MethodSnapshot(
+    std::string_view service_name,
+    std::string_view method_name
+)const noexcept{
+    return Read(FindMethod(service_name,method_name));
+}
+
+std::vector<RpcMethodMetricsSnapshot>
+RpcMetrics::MethodSnapshots()const{
+    std::vector<RpcMethodMetricsSnapshot> snapshots;
+    std::lock_guard<std::mutex> lock(methods_mutex_);
+
+    for(const auto& service:methods_){
+        for(const auto& method:service.second){
+            RpcMethodMetricsSnapshot snapshot;
+            snapshot.service_name=service.first;
+            snapshot.method_name=method.first;
+            snapshot.metrics=Read(method.second.get());
+            snapshots.push_back(std::move(snapshot));
+        }
+    }
+
+    return snapshots;
 }
 
 }

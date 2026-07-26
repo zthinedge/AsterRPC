@@ -40,7 +40,7 @@ AsterRPC 覆盖了一次 RPC 调用从非阻塞网络 I/O、二进制协议编�
 | 可靠性 | Timeout 与 Deadline 处理 | ✅ |
 | 可靠性 | 基于幂等语义的失败重试 | ✅ |
 | 连接管理 | 连接池 | ✅ |
-| 可观测性 | 异步日志与运行时 Metrics | ✅ |
+| 可观测性 | TraceContext、异步日志与方法级 Metrics | ✅ |
 | 服务发现 | 可选的 ZooKeeper 服务注册与发现 | ✅ |
 | 负载均衡 | Round Robin | ✅ |
 | 负载均衡 | P2C-EWMA | ✅ |

@@ -1,5 +1,6 @@
 #include "minirpc/log/AsyncLogger.h"
 #include "minirpc/log/LogMacros.h"
+#include "minirpc/trace/TraceContext.h"
 
 #include <cassert>
 #include <chrono>
@@ -186,6 +187,36 @@ void TestConcurrentLogging(){
     assert(CountLines(sink_ptr->Contents())==expected);
 }
 
+void TestTraceMetadata(){
+    auto sink=std::make_unique<MemorySink>();
+    MemorySink* sink_ptr=sink.get();
+    AsyncLogger logger(TestOptions(),std::move(sink));
+
+    minirpc::trace::TraceContext context;
+    context.trace_id="trace-123";
+    context.span_id="span-456";
+    context.parent_span_id="span-parent";
+    context.deadline_us=789;
+
+    {
+        minirpc::trace::TraceScope scope(context);
+        MINIRPC_LOG_INFO(logger,"traced message");
+    }
+
+    MINIRPC_LOG_INFO(logger,"untraced message");
+    logger.Stop();
+
+    std::string contents=sink_ptr->Contents();
+    assert(contents.find(
+        "traced message [trace_id=trace-123 span_id=span-456 "
+        "parent_span_id=span-parent deadline_us=789]"
+    )!=std::string::npos);
+
+    std::size_t untraced=contents.find("untraced message");
+    assert(untraced!=std::string::npos);
+    assert(contents.find("trace_id=",untraced)==std::string::npos);
+}
+
 void TestQueueFullDoesNotBlockProducer(){
     auto sink=std::make_unique<BlockingSink>();
     BlockingSink* sink_ptr=sink.get();
@@ -254,6 +285,7 @@ void TestRollingFiles(){
 int main(){
     TestLevelAndSourceMetadata();
     TestConcurrentLogging();
+    TestTraceMetadata();
     TestQueueFullDoesNotBlockProducer();
     TestRollingFiles();
     return 0;

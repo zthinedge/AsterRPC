@@ -6,7 +6,7 @@
 namespace minirpc::protocol{
 
 inline constexpr std::uint32_t kMagic=0x4D525043;
-inline constexpr std::uint8_t kVersion=2;
+inline constexpr std::uint8_t kVersion=3;
 inline constexpr std::size_t kHeaderSize=24;
 
 inline constexpr std::size_t kMaxMetaSize=64*1024;

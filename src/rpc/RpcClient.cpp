@@ -209,9 +209,17 @@ void RpcClient::StartCall(
     state->deadline_us=ResolveDeadline(options);
     state->max_retries=options.max_retries;
     state->idempotent=options.idempotent;
+    const trace::TraceContext* parent=trace::CurrentTraceContext();
+    state->trace_context=parent
+        ?trace::CreateChildSpan(*parent,state->deadline_us)
+        :trace::CreateRootTrace(state->deadline_us);
+    state->deadline_us=state->trace_context.deadline_us;
     state->started_at=metrics::RpcMetrics::Clock::now();
     state->completion=std::move(completion);
-    metrics_.RequestStarted();
+    metrics_.RequestStarted(
+        state->service_name,
+        state->method_name
+    );
 
     StartAttempt(state);
 }
@@ -257,7 +265,10 @@ void RpcClient::HandleAttemptResponse(
         !DeadlineReached(state->deadline_us);
 
     if(can_retry){
-        metrics_.RetryStarted();
+        metrics_.RetryStarted(
+            state->service_name,
+            state->method_name
+        );
         cluster::RetryPolicy retry_policy(
             static_cast<std::size_t>(state->max_retries)+1,
             std::chrono::milliseconds(1),
@@ -275,9 +286,12 @@ void RpcClient::HandleAttemptResponse(
 
     state->finished=true;
     metrics_.RequestFinished(
+        state->service_name,
+        state->method_name,
         response.meta.status_code,
         state->started_at
     );
+    trace::TraceScope trace_scope(state->trace_context);
     state->completion(std::move(response));
 }
 
@@ -290,6 +304,10 @@ protocol::RpcMessage RpcClient::MakeRequest(
     request.meta.service_name=state.service_name;
     request.meta.method_name=state.method_name;
     request.meta.deadline_us=state.deadline_us;
+    request.meta.trace_id=state.trace_context.trace_id;
+    request.meta.span_id=state.trace_context.span_id;
+    request.meta.parent_span_id=
+        state.trace_context.parent_span_id;
     request.payload=state.payload;
     return request;
 }
@@ -346,6 +364,18 @@ bool RpcClient::IsConnected()const noexcept{
 
 metrics::RpcMetricsSnapshot RpcClient::GetMetrics()const noexcept{
     return metrics_.Snapshot();
+}
+
+metrics::RpcMetricsSnapshot RpcClient::GetMethodMetrics(
+    std::string_view service_name,
+    std::string_view method_name
+)const noexcept{
+    return metrics_.MethodSnapshot(service_name,method_name);
+}
+
+std::vector<metrics::RpcMethodMetricsSnapshot>
+RpcClient::GetAllMethodMetrics()const{
+    return metrics_.MethodSnapshots();
 }
 
 void RpcClient::SetConnectionCallback(ConnectionCallback callback){

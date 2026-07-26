@@ -140,6 +140,68 @@ void TestConcurrentUpdates(){
     assert(snapshot.latency_samples==expected);
 }
 
+void TestServiceMethodAggregation(){
+    RpcMetrics metrics;
+
+    metrics.RequestStarted("UserService","GetUser");
+    metrics.RequestStarted("UserService","GetUser");
+    metrics.RequestStarted("OrderService","CreateOrder");
+
+    metrics.RequestFinished(
+        "UserService",
+        "GetUser",
+        StatusCode::Ok,
+        std::chrono::microseconds(100)
+    );
+    metrics.RequestFinished(
+        "UserService",
+        "GetUser",
+        StatusCode::Timeout,
+        std::chrono::microseconds(200)
+    );
+    metrics.RequestFinished(
+        "OrderService",
+        "CreateOrder",
+        StatusCode::InternalError,
+        std::chrono::microseconds(300)
+    );
+    metrics.RetryStarted("UserService","GetUser");
+
+    auto user=metrics.MethodSnapshot("UserService","GetUser");
+    assert(user.total_requests==2);
+    assert(user.successful_requests==1);
+    assert(user.failed_requests==1);
+    assert(user.timeout_requests==1);
+    assert(user.retries==1);
+    assert(user.total_latency_us==300);
+
+    auto order=metrics.MethodSnapshot(
+        "OrderService",
+        "CreateOrder"
+    );
+    assert(order.total_requests==1);
+    assert(order.failed_requests==1);
+    assert(order.retries==0);
+
+    assert(metrics.MethodSnapshot(
+        "Unknown",
+        "Method"
+    ).total_requests==0);
+
+    auto methods=metrics.MethodSnapshots();
+    assert(methods.size()==2);
+    assert(methods[0].service_name=="OrderService");
+    assert(methods[0].method_name=="CreateOrder");
+    assert(methods[1].service_name=="UserService");
+    assert(methods[1].method_name=="GetUser");
+
+    auto total=metrics.Snapshot();
+    assert(total.total_requests==3);
+    assert(total.successful_requests==1);
+    assert(total.failed_requests==2);
+    assert(total.retries==1);
+}
+
 }
 
 int main(){
@@ -147,6 +209,7 @@ int main(){
     TestConnections();
     TestPercentiles();
     TestConcurrentUpdates();
+    TestServiceMethodAggregation();
 
     std::cout<<"rpc metrics tests passed\n";
 }

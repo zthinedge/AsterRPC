@@ -7,6 +7,7 @@
 #include "minirpc/protocol/RpcMessage.h"
 #include "minirpc/rpc/CallOptions.h"
 #include "minirpc/rpc/RpcServer.h"
+#include "minirpc/trace/TraceContext.h"
 
 #include <arpa/inet.h>
 #include <atomic>
@@ -371,6 +372,55 @@ void TestBusinessErrorsAreNotRetried(){
     assert(metrics.retries==0);
 }
 
+void TestTraceContextCrossesPoolThread(){
+    std::uint16_t port=FindFreePort();
+    EchoServer server(port);
+    LoopThread client_loop;
+    cluster::ConnectionPoolOptions options;
+    options.max_connections=1;
+    options.idle_timeout=std::chrono::milliseconds::zero();
+    options.reap_interval=std::chrono::milliseconds(10);
+
+    auto pool=std::make_shared<cluster::ConnectionPool>(
+        client_loop.Loop(),
+        cluster::Endpoint("127.0.0.1",port),
+        options
+    );
+
+    std::uint64_t deadline=static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::system_clock::now().time_since_epoch()
+        ).count()
+    )+1000000;
+    trace::TraceContext parent=trace::CreateRootTrace(deadline);
+
+    protocol::RpcMessage response;
+    {
+        trace::TraceScope scope(parent);
+        response=GetResponse(pool->FutureCall(
+            "EchoService",
+            "Echo",
+            "traced",
+            {}
+        ));
+    }
+
+    assert(response.meta.status_code==protocol::StatusCode::Ok);
+    assert(response.meta.trace_id==parent.trace_id);
+    assert(response.meta.deadline_us==deadline);
+    assert(!response.meta.span_id.empty());
+    assert(!response.meta.parent_span_id.empty());
+    assert(response.meta.parent_span_id!=parent.span_id);
+
+    auto method_metrics=pool->GetMethodMetrics(
+        "EchoService",
+        "Echo"
+    );
+    assert(method_metrics.total_requests==1);
+    assert(method_metrics.successful_requests==1);
+    assert(pool->GetAllMethodMetrics().size()==1);
+}
+
 void TestRetryDoesNotExceedDeadline(){
     std::uint16_t port=FindFreePort();
     LoopThread loop_thread;
@@ -530,6 +580,7 @@ int main(){
     TestConnectionFailureIsExplicit();
     TestRetryCanRecoverOnANewConnection();
     TestBusinessErrorsAreNotRetried();
+    TestTraceContextCrossesPoolThread();
     TestRetryDoesNotExceedDeadline();
     TestReuseLimitDistributionAndInvalidRemoval();
     TestIdleConnectionReaping();

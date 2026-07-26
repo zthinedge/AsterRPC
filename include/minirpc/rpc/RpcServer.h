@@ -6,6 +6,8 @@
 #include "minirpc/rpc/ServiceDispatcher.h"
 
 #include <string>
+#include <string_view>
+#include <vector>
 
 namespace minirpc::net{
 class EventLoop;
@@ -31,6 +33,12 @@ public:
 
     void Start();
     metrics::RpcMetricsSnapshot GetMetrics()const noexcept;
+    metrics::RpcMetricsSnapshot GetMethodMetrics(
+        std::string_view service_name,
+        std::string_view method_name
+    )const noexcept;
+    std::vector<metrics::RpcMethodMetricsSnapshot>
+    GetAllMethodMetrics()const;
 
 private:
     void HandleMessage(

@@ -48,6 +48,7 @@ add_library(minirpc
     src/rpc/RpcServer.cpp
     src/rpc/PendingCalls.cpp
     src/rpc/RpcClient.cpp
+    src/trace/TraceContext.cpp
 )
 
 target_include_directories(minirpc PUBLIC
@@ -180,6 +181,9 @@ add_executable(test_health_checker
 add_executable(test_rpc_metrics
     tests/metrics/test_rpc_metrics.cpp
 )
+add_executable(test_trace_context
+    tests/trace/test_trace_context.cpp
+)
 if(MINIRPC_WITH_ZOOKEEPER)
     add_executable(test_zookeeper_registry
         tests/registry/test_zookeeper_registry.cpp
@@ -231,6 +235,9 @@ target_link_libraries(test_health_checker PRIVATE
 target_link_libraries(test_rpc_metrics PRIVATE
     minirpc
 )
+target_link_libraries(test_trace_context PRIVATE
+    minirpc
+)
 if(MINIRPC_WITH_ZOOKEEPER)
     target_link_libraries(test_zookeeper_registry PRIVATE
         minirpc_zookeeper
@@ -253,6 +260,7 @@ add_test(NAME test_round_robin COMMAND test_round_robin)
 add_test(NAME test_p2c_ewma COMMAND test_p2c_ewma)
 add_test(NAME test_health_checker COMMAND test_health_checker)
 add_test(NAME test_rpc_metrics COMMAND test_rpc_metrics)
+add_test(NAME test_trace_context COMMAND test_trace_context)
 if(MINIRPC_WITH_ZOOKEEPER)
     add_test(
         NAME test_zookeeper_registry

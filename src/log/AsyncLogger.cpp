@@ -1,5 +1,6 @@
 #include "minirpc/log/AsyncLogger.h"
 
+#include "minirpc/trace/TraceContext.h"
 #include "RollingFileSink.h"
 
 #include <algorithm>
@@ -71,7 +72,23 @@ void AppendRecord(std::ostringstream& output,const LogRecord& record){
         output<<' '<<record.function;
     }
 
-    output<<"] "<<record.message<<'\n';
+    output<<"] "<<record.message;
+
+    if(!record.trace_id.empty()){
+        output<<" [trace_id="<<record.trace_id
+              <<" span_id="<<record.span_id;
+
+        if(!record.parent_span_id.empty()){
+            output<<" parent_span_id="<<record.parent_span_id;
+        }
+        if(record.deadline_us!=0){
+            output<<" deadline_us="<<record.deadline_us;
+        }
+
+        output<<']';
+    }
+
+    output<<'\n';
 }
 
 }
@@ -131,6 +148,15 @@ bool AsyncLogger::Log(
     record.line=line;
     record.function=function;
     record.message=message;
+
+    const trace::TraceContext* context=
+        trace::CurrentTraceContext();
+    if(context!=nullptr){
+        record.trace_id=context->trace_id;
+        record.span_id=context->span_id;
+        record.parent_span_id=context->parent_span_id;
+        record.deadline_us=context->deadline_us;
+    }
 
     std::size_t queue_size=0;
     {
