@@ -24,6 +24,7 @@ add_library(minirpc
     src/cluster/ChannelManager.cpp
     src/health/EndpointState.cpp
     src/health/HealthChecker.cpp
+    src/health/HealthService.cpp
     src/loadbalance/P2cEwmaLoadBalancer.cpp
     src/log/AsyncLogger.cpp
     src/log/RollingFileSink.cpp
@@ -173,6 +174,9 @@ add_executable(test_round_robin
 add_executable(test_p2c_ewma
     tests/loadbalance/test_p2c_ewma.cpp
 )
+add_executable(test_health_checker
+    tests/health/test_health_checker.cpp
+)
 add_executable(test_rpc_metrics
     tests/metrics/test_rpc_metrics.cpp
 )
@@ -221,6 +225,9 @@ target_link_libraries(test_round_robin PRIVATE
 target_link_libraries(test_p2c_ewma PRIVATE
     minirpc
 )
+target_link_libraries(test_health_checker PRIVATE
+    minirpc
+)
 target_link_libraries(test_rpc_metrics PRIVATE
     minirpc
 )
@@ -244,6 +251,7 @@ add_test(NAME test_async_logger COMMAND test_async_logger)
 add_test(NAME test_connection_pool COMMAND test_connection_pool)
 add_test(NAME test_round_robin COMMAND test_round_robin)
 add_test(NAME test_p2c_ewma COMMAND test_p2c_ewma)
+add_test(NAME test_health_checker COMMAND test_health_checker)
 add_test(NAME test_rpc_metrics COMMAND test_rpc_metrics)
 if(MINIRPC_WITH_ZOOKEEPER)
     add_test(

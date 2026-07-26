@@ -67,7 +67,8 @@ void TestFailureHalfOpenAndRecovery(){
     assert(first==health::RequestKind::Normal);
     state.CompleteFailure(Microseconds(100),*first,now);
     assert(state.Snapshot(now).status==
-           health::HealthStatus::Healthy);
+           health::HealthStatus::Suspect);
+    assert(state.Snapshot(now).selectable);
 
     auto second=state.TryAcquire(now);
     assert(second==health::RequestKind::Normal);

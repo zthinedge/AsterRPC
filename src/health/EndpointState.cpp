@@ -103,7 +103,9 @@ void EndpointState::CompleteSuccess(
         return;
     }
 
-    if(status_==HealthStatus::Healthy){
+    if(status_==HealthStatus::Healthy||
+       status_==HealthStatus::Suspect){
+        status_=HealthStatus::Healthy;
         consecutive_failures_=0;
     }
 }
@@ -124,13 +126,16 @@ void EndpointState::CompleteFailure(
         return;
     }
 
-    if(status_!=HealthStatus::Healthy){
+    if(status_!=HealthStatus::Healthy&&
+       status_!=HealthStatus::Suspect){
         return;
     }
 
     ++consecutive_failures_;
     if(consecutive_failures_>=options_.failure_threshold){
         MarkUnhealthy(now);
+    }else{
+        status_=HealthStatus::Suspect;
     }
 }
 
@@ -140,6 +145,74 @@ void EndpointState::Cancel(RequestKind kind)noexcept{
 
     if(kind==RequestKind::HalfOpenProbe){
         half_open_probe_inflight_=false;
+    }
+}
+
+bool EndpointState::TryBeginHealthCheck(TimePoint now){
+    std::lock_guard<std::mutex> lock(mutex_);
+    RefreshHealth(now);
+
+    if(status_==HealthStatus::Unhealthy||
+       health_check_inflight_){
+        return false;
+    }
+
+    if(status_==HealthStatus::HalfOpen){
+        if(half_open_probe_inflight_){
+            return false;
+        }
+        half_open_probe_inflight_=true;
+        health_check_is_half_open_=true;
+    }else{
+        health_check_is_half_open_=false;
+    }
+
+    health_check_inflight_=true;
+    return true;
+}
+
+void EndpointState::CompleteHealthCheck(
+    bool success,
+    TimePoint now
+){
+    std::lock_guard<std::mutex> lock(mutex_);
+    if(!health_check_inflight_){
+        return;
+    }
+
+    bool was_half_open=health_check_is_half_open_;
+    health_check_inflight_=false;
+    health_check_is_half_open_=false;
+
+    if(was_half_open){
+        half_open_probe_inflight_=false;
+        if(success){
+            status_=HealthStatus::Healthy;
+            consecutive_failures_=0;
+            retry_at_=TimePoint{};
+        }else{
+            ++consecutive_failures_;
+            MarkUnhealthy(now);
+        }
+        return;
+    }
+
+    if(status_!=HealthStatus::Healthy&&
+       status_!=HealthStatus::Suspect){
+        return;
+    }
+
+    if(success){
+        status_=HealthStatus::Healthy;
+        consecutive_failures_=0;
+        return;
+    }
+
+    ++consecutive_failures_;
+    if(consecutive_failures_>=options_.failure_threshold){
+        MarkUnhealthy(now);
+    }else{
+        status_=HealthStatus::Suspect;
     }
 }
 
@@ -166,6 +239,7 @@ EndpointStateSnapshot EndpointState::Snapshot(TimePoint now){
     snapshot.score=score;
     snapshot.selectable=
         status_==HealthStatus::Healthy||
+        status_==HealthStatus::Suspect||
         (status_==HealthStatus::HalfOpen&&
          !half_open_probe_inflight_);
     return snapshot;

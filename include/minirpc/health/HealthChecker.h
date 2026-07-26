@@ -3,12 +3,21 @@
 #include "minirpc/cluster/Endpoint.h"
 #include "minirpc/health/EndpointState.h"
 
+#include <chrono>
+#include <functional>
 #include <memory>
-#include <mutex>
-#include <unordered_map>
 #include <vector>
 
+namespace minirpc::net{
+class EventLoop;
+}
+
 namespace minirpc::health{
+
+struct ActiveHealthCheckOptions{
+    std::chrono::milliseconds interval{2000};
+    std::chrono::milliseconds timeout{1000};
+};
 
 class HealthChecker{
 public:
@@ -16,8 +25,18 @@ public:
         std::shared_ptr<const std::vector<cluster::Endpoint>>;
     using StateList=std::vector<std::shared_ptr<EndpointState>>;
     using StateSnapshot=std::shared_ptr<const StateList>;
+    using ProbeCompletion=std::function<void(bool)>;
+    using ProbeFunction=std::function<void(
+        const cluster::Endpoint&,
+        std::chrono::milliseconds,
+        ProbeCompletion
+    )>;
 
     explicit HealthChecker(EndpointStateOptions options={});
+    ~HealthChecker();
+
+    HealthChecker(const HealthChecker&)=delete;
+    HealthChecker& operator=(const HealthChecker&)=delete;
 
     StateSnapshot Update(const EndpointSnapshot& endpoints);
 
@@ -32,21 +51,18 @@ public:
 
     std::size_t Size()const;
 
+    void Start(
+        net::EventLoop* loop,
+        ProbeFunction probe,
+        ActiveHealthCheckOptions options={}
+    );
+
+    void Stop()noexcept;
+    bool IsRunning()const noexcept;
+
 private:
-    EndpointStateOptions options_;
-    mutable std::mutex mutex_;
-    std::unordered_map<
-        cluster::Endpoint,
-        std::shared_ptr<EndpointState>,
-        cluster::EndpointHash
-    > states_;
-    std::unordered_map<
-        cluster::Endpoint,
-        double,
-        cluster::EndpointHash
-    > weights_;
-    EndpointSnapshot endpoint_snapshot_;
-    StateSnapshot state_snapshot_;
+    class Impl;
+    std::shared_ptr<Impl> impl_;
 };
 
 }

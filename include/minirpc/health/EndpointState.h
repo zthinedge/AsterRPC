@@ -12,6 +12,7 @@ namespace minirpc::health{
 
 enum class HealthStatus{
     Healthy,
+    Suspect,
     Unhealthy,
     HalfOpen
 };
@@ -71,6 +72,15 @@ public:
 
     void Cancel(RequestKind kind)noexcept;
 
+    bool TryBeginHealthCheck(
+        TimePoint now=Clock::now()
+    );
+
+    void CompleteHealthCheck(
+        bool success,
+        TimePoint now=Clock::now()
+    );
+
     EndpointStateSnapshot Snapshot(
         TimePoint now=Clock::now()
     );
@@ -94,6 +104,8 @@ private:
     std::size_t consecutive_failures_=0;
     TimePoint retry_at_{};
     bool half_open_probe_inflight_=false;
+    bool health_check_inflight_=false;
+    bool health_check_is_half_open_=false;
 };
 
 }

@@ -1,3 +1,4 @@
+#include "minirpc/health/HealthService.h"
 #include "minirpc/net/Buffer.h"
 #include "minirpc/net/EventLoop.h"
 #include "minirpc/net/InetAddress.h"
@@ -246,6 +247,22 @@ void TestRpcServer(){
     assert(response.meta.status_code==
            protocol::StatusCode::MethodNotFound);
 
+    SendAll(
+        fd,
+        codec.Encode(MakeRequest(
+            200,
+            health::HealthService::ServiceName(),
+            health::HealthService::MethodName(),
+            {}
+        ))
+    );
+
+    response=ReadOne(fd,&response_buffer);
+    assert(response.request_id==200);
+    assert(response.meta.status_code==protocol::StatusCode::Ok);
+    assert(response.payload==
+           health::HealthService::ServingPayload());
+
     protocol::RpcMessage expired_request=MakeRequest(
         104,
         "EchoService",
@@ -261,13 +278,13 @@ void TestRpcServer(){
     assert(response.payload.empty());
 
     auto metrics=server->GetMetrics();
-    assert(metrics.total_requests==4);
-    assert(metrics.successful_requests==1);
+    assert(metrics.total_requests==5);
+    assert(metrics.successful_requests==2);
     assert(metrics.failed_requests==3);
     assert(metrics.timeout_requests==1);
     assert(metrics.inflight_requests==0);
     assert(metrics.active_connections==1);
-    assert(metrics.latency_samples==4);
+    assert(metrics.latency_samples==5);
 
     std::string invalid=codec.Encode(
         MakeRequest(105,"EchoService","Echo","bad")

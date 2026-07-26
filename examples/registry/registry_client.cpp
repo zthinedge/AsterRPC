@@ -1,4 +1,5 @@
 #include "minirpc/cluster/ChannelManager.h"
+#include "minirpc/health/HealthService.h"
 #include "minirpc/loadbalance/P2cEwmaLoadBalancer.h"
 #include "minirpc/net/EventLoop.h"
 #include "minirpc/protocol/RpcMessage.h"
@@ -127,6 +128,47 @@ int main(int argc,char* argv[]){
         cluster::ChannelManager channels(loop_thread.Loop());
         loadbalance::P2cEwmaLoadBalancer load_balancer;
 
+        health::ActiveHealthCheckOptions health_options;
+        health_options.interval=std::chrono::seconds(2);
+        health_options.timeout=std::chrono::milliseconds(800);
+
+        load_balancer.GetHealthChecker().Start(
+            loop_thread.Loop(),
+            [&channels](
+                const cluster::Endpoint& endpoint,
+                std::chrono::milliseconds timeout,
+                health::HealthChecker::ProbeCompletion completion
+            ){
+                rpc::CallOptions options;
+                options.idempotent=true;
+                options.timeout=timeout;
+
+                try{
+                    auto pool=channels.GetOrCreate(endpoint);
+                    pool->AsyncCall(
+                        health::HealthService::ServiceName(),
+                        health::HealthService::MethodName(),
+                        {},
+                        [completion](
+                            protocol::RpcMessage response
+                        ){
+                            bool serving=
+                                response.meta.status_code==
+                                    protocol::StatusCode::Ok&&
+                                response.payload==
+                                    health::HealthService::
+                                        ServingPayload();
+                            completion(serving);
+                        },
+                        options
+                    );
+                }catch(...){
+                    completion(false);
+                }
+            },
+            health_options
+        );
+
         rpc::CallOptions call_options;
         call_options.idempotent=true;
         call_options.timeout=std::chrono::milliseconds(1200);
@@ -199,6 +241,7 @@ int main(int argc,char* argv[]){
             std::this_thread::sleep_for(arguments.interval);
         }
 
+        load_balancer.GetHealthChecker().Stop();
         zk_client->Close();
         return 0;
     }catch(const std::exception& error){

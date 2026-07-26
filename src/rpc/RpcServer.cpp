@@ -1,5 +1,6 @@
 #include "minirpc/rpc/RpcServer.h"
 
+#include "minirpc/health/HealthService.h"
 #include "minirpc/net/Buffer.h"
 #include "minirpc/net/TcpConnection.h"
 
@@ -51,6 +52,7 @@ RpcServer::RpcServer(
     tcp_server_.SetCloseCallback([this](){
         metrics_.ConnectionClosed();
     });
+    health::HealthService::RegisterTo(this);
 }
 
 void RpcServer::RegisterMethod(
