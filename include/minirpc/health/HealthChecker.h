@@ -49,6 +49,9 @@ public:
         double weight
     );
 
+    void UpdateEndpointOptions(EndpointStateOptions options);
+    void UpdateActiveOptions(ActiveHealthCheckOptions options);
+
     std::size_t Size()const;
 
     void Start(

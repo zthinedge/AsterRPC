@@ -398,6 +398,86 @@ public:
         );
     }
 
+    std::string GetDataAndWatch(
+        const std::string& path,
+        DataWatchCallback callback
+    ){
+        ParentPaths(path);
+        if(!callback){
+            throw std::invalid_argument(
+                "ZooKeeper data watch callback is empty"
+            );
+        }
+
+        std::shared_ptr<Session> session=ConnectedSession();
+        auto context=std::make_shared<WatchContext>();
+
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if(session_!=session||
+               state_!=ZooKeeperConnectionState::Connected){
+                throw std::logic_error(
+                    "ZooKeeper session changed before installing watch"
+                );
+            }
+
+            context->bridge=bridge_;
+            context->session=session;
+            context->generation=generation_;
+            context->id=NextWatchIdInLock();
+            context->callback=std::move(callback);
+            session->watches.emplace(context->id,context);
+        }
+
+        Stat stat{};
+        int result=zoo_wexists(
+            session->handle.get(),
+            path.c_str(),
+            &Impl::DataWatcher,
+            context.get(),
+            &stat
+        );
+        if(result!=ZOK){
+            RemoveWatch(session,context->id);
+            throw ZooKeeperError(
+                "watch node data "+path,
+                result
+            );
+        }
+
+        try{
+            return GetData(path);
+        }catch(...){
+            // zoo_wexists成功后Watch仍由ZooKeeper持有，context必须保留到
+            // Watch触发或Session销毁，不能从session->watches中提前删除。
+            throw;
+        }
+    }
+
+    void SetData(
+        const std::string& path,
+        const std::string& data
+    ){
+        ParentPaths(path);
+        if(data.size()>static_cast<std::size_t>(INT_MAX)){
+            throw std::invalid_argument(
+                "ZooKeeper node data is too large"
+            );
+        }
+
+        std::shared_ptr<Session> session=ConnectedSession();
+        int result=zoo_set(
+            session->handle.get(),
+            path.c_str(),
+            data.data(),
+            static_cast<int>(data.size()),
+            -1
+        );
+        if(result!=ZOK){
+            throw ZooKeeperError("set node data "+path,result);
+        }
+    }
+
 private:
     struct WatcherBridge{
         std::mutex mutex;
@@ -478,13 +558,36 @@ private:
 
         std::lock_guard<std::mutex> lock(bridge->mutex);
         if(bridge->owner!=nullptr){
-            bridge->owner->HandleChildrenWatcher(
+            bridge->owner->HandleWatch(
                 std::move(watch_context)
             );
         }
     }
 
-    void HandleChildrenWatcher(
+    static void DataWatcher(
+        zhandle_t*,
+        int type,
+        int,
+        const char*,
+        void* context
+    ){
+        if(context==nullptr||type==ZOO_SESSION_EVENT){
+            return;
+        }
+
+        auto* raw_context=static_cast<WatchContext*>(context);
+        std::shared_ptr<WatchContext> watch_context=
+            raw_context->shared_from_this();
+        std::shared_ptr<WatcherBridge> bridge=
+            watch_context->bridge;
+
+        std::lock_guard<std::mutex> lock(bridge->mutex);
+        if(bridge->owner!=nullptr){
+            bridge->owner->HandleWatch(std::move(watch_context));
+        }
+    }
+
+    void HandleWatch(
         std::shared_ptr<WatchContext> context
     ){
         std::lock_guard<std::mutex> lock(mutex_);
@@ -804,6 +907,20 @@ std::vector<std::string> ZooKeeperClient::GetChildrenAndWatch(
 
 std::string ZooKeeperClient::GetData(const std::string& path){
     return impl_->GetData(path);
+}
+
+std::string ZooKeeperClient::GetDataAndWatch(
+    const std::string& path,
+    DataWatchCallback callback
+){
+    return impl_->GetDataAndWatch(path,std::move(callback));
+}
+
+void ZooKeeperClient::SetData(
+    const std::string& path,
+    const std::string& data
+){
+    impl_->SetData(path,data);
 }
 
 }

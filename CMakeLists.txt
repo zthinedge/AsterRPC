@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Threads REQUIRED)
+find_package(nlohmann_json 3.10 REQUIRED)
 
 option(
     MINIRPC_WITH_ZOOKEEPER
@@ -17,6 +18,7 @@ option(
 include(cmake/Protobuf.cmake)
 
 add_library(minirpc
+    src/config/RpcConfig.cpp
     src/cluster/Endpoint.cpp
     src/cluster/RoundRobin.cpp
     src/cluster/RetryPolicy.cpp
@@ -58,6 +60,9 @@ target_include_directories(minirpc PUBLIC
 target_link_libraries(minirpc PUBLIC
     Threads::Threads
 )
+target_link_libraries(minirpc PRIVATE
+    nlohmann_json::nlohmann_json
+)
 
 if(MINIRPC_WITH_ZOOKEEPER)
     find_path(
@@ -73,6 +78,7 @@ if(MINIRPC_WITH_ZOOKEEPER)
 
     add_library(minirpc_zookeeper
         src/registry/ZooKeeperClient.cpp
+        src/registry/ZooKeeperConfigCenter.cpp
         src/registry/ZooKeeperDiscovery.cpp
         src/registry/ZooKeeperProvider.cpp
     )
@@ -184,6 +190,9 @@ add_executable(test_rpc_metrics
 add_executable(test_trace_context
     tests/trace/test_trace_context.cpp
 )
+add_executable(test_rpc_config
+    tests/config/test_rpc_config.cpp
+)
 if(MINIRPC_WITH_ZOOKEEPER)
     add_executable(test_zookeeper_registry
         tests/registry/test_zookeeper_registry.cpp
@@ -238,6 +247,9 @@ target_link_libraries(test_rpc_metrics PRIVATE
 target_link_libraries(test_trace_context PRIVATE
     minirpc
 )
+target_link_libraries(test_rpc_config PRIVATE
+    minirpc
+)
 if(MINIRPC_WITH_ZOOKEEPER)
     target_link_libraries(test_zookeeper_registry PRIVATE
         minirpc_zookeeper
@@ -261,6 +273,7 @@ add_test(NAME test_p2c_ewma COMMAND test_p2c_ewma)
 add_test(NAME test_health_checker COMMAND test_health_checker)
 add_test(NAME test_rpc_metrics COMMAND test_rpc_metrics)
 add_test(NAME test_trace_context COMMAND test_trace_context)
+add_test(NAME test_rpc_config COMMAND test_rpc_config)
 if(MINIRPC_WITH_ZOOKEEPER)
     add_test(
         NAME test_zookeeper_registry

@@ -46,6 +46,7 @@ public:
     using StateCallback=
         std::function<void(const ZooKeeperConnectionEvent&)>;
     using ChildrenWatchCallback=std::function<void()>;
+    using DataWatchCallback=std::function<void()>;
 
     explicit ZooKeeperClient(ZooKeeperClientOptions options={});
     ~ZooKeeperClient();
@@ -78,6 +79,14 @@ public:
     );
 
     std::string GetData(const std::string& path);
+    std::string GetDataAndWatch(
+        const std::string& path,
+        DataWatchCallback callback
+    );
+    void SetData(
+        const std::string& path,
+        const std::string& data
+    );
 
 private:
     class Impl;

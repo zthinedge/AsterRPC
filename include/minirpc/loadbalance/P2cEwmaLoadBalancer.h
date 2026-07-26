@@ -65,6 +65,8 @@ public:
         double weight
     );
 
+    void UpdateOptions(health::EndpointStateOptions options);
+
     health::HealthChecker& GetHealthChecker()noexcept;
     const health::HealthChecker& GetHealthChecker()const noexcept;
 

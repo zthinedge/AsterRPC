@@ -124,6 +124,52 @@ public:
         weights_[endpoint]=weight;
     }
 
+    void UpdateEndpointOptions(EndpointStateOptions options){
+        ValidateEndpointStateOptions(options);
+
+        std::lock_guard<std::mutex> lock(mutex_);
+        options_=options;
+        for(auto& item:states_){
+            EndpointStateOptions endpoint_options=options_;
+            auto weight=weights_.find(item.first);
+            if(weight!=weights_.end()){
+                endpoint_options.weight=weight->second;
+            }
+            item.second->UpdateOptions(endpoint_options);
+        }
+    }
+
+    void UpdateActiveOptions(ActiveHealthCheckOptions options){
+        ValidateActiveOptions(options);
+
+        net::EventLoop* loop=nullptr;
+        TimerId timer_id=0;
+        std::uint64_t generation=0;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            active_options_=options;
+            if(!running_){
+                return;
+            }
+
+            loop=loop_;
+            timer_id=timer_id_;
+            timer_id_=0;
+            generation=++generation_;
+        }
+
+        if(timer_id!=0){
+            loop->CancelTimer(timer_id);
+        }
+
+        std::weak_ptr<Impl> weak=shared_from_this();
+        loop->RunInLoop([weak,generation](){
+            if(auto self=weak.lock()){
+                self->RunRound(generation);
+            }
+        });
+    }
+
     std::size_t Size()const{
         std::lock_guard<std::mutex> lock(mutex_);
         return states_.size();
@@ -336,6 +382,18 @@ void HealthChecker::SetWeight(
     double weight
 ){
     impl_->SetWeight(endpoint,weight);
+}
+
+void HealthChecker::UpdateEndpointOptions(
+    EndpointStateOptions options
+){
+    impl_->UpdateEndpointOptions(options);
+}
+
+void HealthChecker::UpdateActiveOptions(
+    ActiveHealthCheckOptions options
+){
+    impl_->UpdateActiveOptions(options);
 }
 
 std::size_t HealthChecker::Size()const{

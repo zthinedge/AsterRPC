@@ -47,9 +47,31 @@ void TestEndpointStateEwmaAndScore(){
 
     auto snapshot=state.Snapshot();
     assert(std::abs(snapshot.ewma_latency_us-200.0)<0.001);
+    assert(snapshot.has_latency_sample);
     assert(std::abs(snapshot.score-100.0)<0.001);
     assert(snapshot.inflight==0);
     assert(snapshot.status==health::HealthStatus::Healthy);
+}
+
+void TestColdEndpointsAreExplored(){
+    loadbalance::P2cEwmaLoadBalancer balancer(
+        health::EndpointStateOptions{},
+        5
+    );
+    auto endpoints=MakeSnapshot({
+        cluster::Endpoint("127.0.0.1",9001),
+        cluster::Endpoint("127.0.0.1",9002)
+    });
+
+    auto first=balancer.Select(endpoints);
+    assert(first.has_value());
+    cluster::Endpoint first_endpoint=first->GetEndpoint();
+    first->CompleteSuccess(Microseconds(100));
+
+    auto second=balancer.Select(endpoints);
+    assert(second.has_value());
+    assert(second->GetEndpoint()!=first_endpoint);
+    second->CompleteSuccess(Microseconds(200));
 }
 
 void TestFailureHalfOpenAndRecovery(){
@@ -260,15 +282,59 @@ void TestConcurrentSelection(){
     }
 }
 
+void TestSlowEndpointReceivesLessTraffic(){
+    health::EndpointStateOptions options;
+    options.ewma_alpha=1.0;
+    loadbalance::P2cEwmaLoadBalancer balancer(options,23);
+    cluster::Endpoint fast("127.0.0.1",9001);
+    cluster::Endpoint slow("127.0.0.1",9002);
+    auto endpoints=MakeSnapshot({fast,slow});
+
+    balancer.GetHealthChecker().Update(endpoints);
+    auto fast_state=balancer.GetHealthChecker().Find(fast);
+    auto slow_state=balancer.GetHealthChecker().Find(slow);
+
+    auto kind=fast_state->TryAcquire();
+    fast_state->CompleteSuccess(Microseconds(1000),*kind);
+    kind=slow_state->TryAcquire();
+    slow_state->CompleteSuccess(Microseconds(200000),*kind);
+
+    std::size_t fast_requests=0;
+    std::size_t slow_requests=0;
+    for(std::size_t request=0;request<1000;++request){
+        auto selection=balancer.Select(endpoints);
+        assert(selection.has_value());
+
+        if(selection->GetEndpoint()==fast){
+            ++fast_requests;
+            selection->CompleteSuccess(Microseconds(1000));
+        }else{
+            ++slow_requests;
+            selection->CompleteSuccess(Microseconds(200000));
+        }
+    }
+
+    assert(fast_requests>950);
+    assert(slow_requests<50);
+
+    options.ewma_alpha=0.5;
+    options.failure_threshold=1;
+    balancer.UpdateOptions(options);
+    assert(balancer.GetHealthChecker().Find(fast)!=nullptr);
+    assert(balancer.GetHealthChecker().Find(slow)!=nullptr);
+}
+
 }
 
 int main(){
     TestEndpointStateEwmaAndScore();
+    TestColdEndpointsAreExplored();
     TestFailureHalfOpenAndRecovery();
     TestSelectionSpreadsInflight();
     TestWeightAffectsSelection();
     TestUnhealthyEndpointIsSkipped();
     TestSnapshotChanges();
     TestConcurrentSelection();
+    TestSlowEndpointReceivesLessTraffic();
     return 0;
 }

@@ -109,8 +109,16 @@ P2cEwmaLoadBalancer::Select(
         auto candidates=PickTwo(selectable);
         StatePtr first=candidates.first;
         StatePtr second=candidates.second;
+        auto first_snapshot=first->Snapshot();
+        auto second_snapshot=second->Snapshot();
 
-        if(second->Snapshot().score<first->Snapshot().score){
+        bool prefer_second=
+            (!second_snapshot.has_latency_sample&&
+             first_snapshot.has_latency_sample)||
+            (second_snapshot.has_latency_sample==
+                 first_snapshot.has_latency_sample&&
+             second_snapshot.score<first_snapshot.score);
+        if(prefer_second){
             std::swap(first,second);
         }
 
@@ -144,6 +152,12 @@ void P2cEwmaLoadBalancer::SetWeight(
     double weight
 ){
     health_checker_.SetWeight(endpoint,weight);
+}
+
+void P2cEwmaLoadBalancer::UpdateOptions(
+    health::EndpointStateOptions options
+){
+    health_checker_.UpdateEndpointOptions(options);
 }
 
 health::HealthChecker&

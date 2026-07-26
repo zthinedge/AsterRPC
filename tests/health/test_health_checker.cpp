@@ -162,10 +162,93 @@ void TestPeriodicTimeoutAndRecovery(){
     assert(probes.load(std::memory_order_relaxed)==stopped_count);
 }
 
+void TestHotOptionUpdates(){
+    health::EndpointStateOptions state_options;
+    state_options.failure_threshold=3;
+    state_options.ewma_alpha=0.2;
+
+    health::EndpointState state(
+        cluster::Endpoint("127.0.0.1",9001),
+        state_options
+    );
+    auto request=state.TryAcquire();
+    state.CompleteFailure(
+        std::chrono::microseconds(100),
+        *request
+    );
+    assert(state.Snapshot().status==
+           health::HealthStatus::Suspect);
+
+    state_options.failure_threshold=1;
+    state_options.ewma_alpha=1.0;
+    state.UpdateOptions(state_options);
+    assert(state.Snapshot().status==
+           health::HealthStatus::Unhealthy);
+
+    health::EndpointState latency_state(
+        cluster::Endpoint("127.0.0.1",9002)
+    );
+    request=latency_state.TryAcquire();
+    latency_state.CompleteSuccess(
+        std::chrono::microseconds(100),
+        *request
+    );
+
+    health::EndpointStateOptions latency_options;
+    latency_options.ewma_alpha=1.0;
+    latency_state.UpdateOptions(latency_options);
+    request=latency_state.TryAcquire();
+    latency_state.CompleteSuccess(
+        std::chrono::microseconds(400),
+        *request
+    );
+    assert(latency_state.Snapshot().ewma_latency_us==400.0);
+
+    LoopThread loop_thread;
+    health::HealthChecker checker;
+    checker.Update(MakeSnapshot({
+        cluster::Endpoint("127.0.0.1",9003)
+    }));
+    std::atomic_size_t probes{0};
+
+    health::ActiveHealthCheckOptions active_options;
+    active_options.interval=std::chrono::seconds(1);
+    active_options.timeout=std::chrono::milliseconds(50);
+    checker.Start(
+        loop_thread.Loop(),
+        [&probes](
+            const cluster::Endpoint&,
+            std::chrono::milliseconds,
+            health::HealthChecker::ProbeCompletion completion
+        ){
+            probes.fetch_add(1,std::memory_order_relaxed);
+            completion(true);
+        },
+        active_options
+    );
+    assert(WaitUntil(
+        [&probes](){
+            return probes.load(std::memory_order_relaxed)>=1;
+        },
+        std::chrono::milliseconds(100)
+    ));
+
+    active_options.interval=std::chrono::milliseconds(10);
+    checker.UpdateActiveOptions(active_options);
+    assert(WaitUntil(
+        [&probes](){
+            return probes.load(std::memory_order_relaxed)>=3;
+        },
+        std::chrono::milliseconds(150)
+    ));
+    checker.Stop();
+}
+
 }
 
 int main(){
     TestSuspectState();
     TestPeriodicTimeoutAndRecovery();
+    TestHotOptionUpdates();
     return 0;
 }

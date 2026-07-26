@@ -71,6 +71,76 @@ Watch 触发后会重新拉取全部 Provider，并在同一次操作中重新�
 读取旧快照或新快照，不会观察到更新到一半的数据。普通断线期间保留最后
 一次成功快照，新 Session 建立后会重新拉取。
 
+## 配置中心与热更新
+
+配置中心同时监听全局节点和服务节点：
+
+```text
+/mini-rpc/config/global
+/mini-rpc/config/UserService
+```
+
+节点数据为 JSON 对象。服务级配置覆盖同名的全局配置，没有覆盖的字段
+继续继承全局值：
+
+```json
+{
+  "default_timeout_ms": 1200,
+  "retry_count": 1,
+  "load_balancer": "p2c_ewma",
+  "health_check_interval_ms": 2000,
+  "failure_threshold": 3,
+  "ewma_alpha": 0.2
+}
+```
+
+| 字段 | 含义 | 合法值 |
+|---|---|---|
+| `default_timeout_ms` | 默认调用超时 | 非负整数 |
+| `retry_count` | 失败后的重试次数 | 非负整数 |
+| `load_balancer` | 负载均衡算法 | `round_robin` / `p2c_ewma` |
+| `health_check_interval_ms` | 主动探测周期 | 正整数 |
+| `failure_threshold` | 连续失败摘除阈值 | 正整数 |
+| `ewma_alpha` | 新延迟样本的权重 | `(0, 1]` |
+
+Consumer 启动时先拉取配置，再注册一次性 data watch；Watch 触发后重新
+拉取并重新注册。调用线程读取
+`shared_ptr<const RpcConfig>` 不可变快照，不需要在整个请求期间持锁。
+JSON 非法、字段未知或数值越界时会调用错误回调，并继续使用上一份有效
+配置。
+
+```cpp
+registry::ZooKeeperConfigCenter config_center(client);
+config_center.WatchService("UserService");
+
+auto listener=config_center.Subscribe(
+    "UserService",
+    [](config::ConfigStore::Snapshot snapshot){
+        // 将 snapshot 中的参数更新到负载均衡器和健康检查器。
+    }
+);
+```
+
+Registry 示例已经将热配置接入默认超时、重试、RoundRobin/P2C-EWMA
+切换、健康检查周期、失败阈值和 EWMA 参数。`9002` 可人为增加 200ms
+延迟：
+
+```bash
+./build-zk/registry_server 9001
+./build-zk/registry_server 9002 127.0.0.1:2181 127.0.0.1 200
+./build-zk/registry_client 127.0.0.1:2181 80 250
+```
+
+运行期间修改 `/mini-rpc/config/RegistryDemoService` 的
+`load_balancer`，客户端无需重启即可切换算法。P2C-EWMA 会先探索每个
+冷节点；获得 200ms 延迟样本后，慢节点的分数上升，后续流量会主要转向
+9001。
+
+客户端日志写入 `logs/registry_client.log`，服务端日志写入
+`logs/registry_server_<port>.log`。同一次调用在两端具有相同
+`trace_id`，服务端创建新的 `span_id` 并记录上游调用 span 为
+`parent_span_id`，可直接用 `trace_id` 串联调用日志。
+
 ## RoundRobin动态实例验收
 
 `RoundRobin`直接读取服务发现发布的不可变快照，使用原子序号轮询。实例

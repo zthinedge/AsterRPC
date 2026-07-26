@@ -101,7 +101,7 @@ void EventLoop::CancelTimer(TimerId timer_id){
 }
 
 void EventLoop::Loop(){
-    while(!stop_.load()){
+    while(!stop_.load()){   
         ep_.Poll(-1,&channels);
 
         for(auto ch:channels){

@@ -1,11 +1,18 @@
 #include "minirpc/cluster/ChannelManager.h"
+#include "minirpc/cluster/RetryPolicy.h"
+#include "minirpc/cluster/RoundRobin.h"
+#include "minirpc/config/RpcConfig.h"
 #include "minirpc/health/HealthService.h"
 #include "minirpc/loadbalance/P2cEwmaLoadBalancer.h"
+#include "minirpc/log/AsyncLogger.h"
+#include "minirpc/log/LogMacros.h"
 #include "minirpc/net/EventLoop.h"
 #include "minirpc/protocol/RpcMessage.h"
 #include "minirpc/registry/ZooKeeperClient.h"
+#include "minirpc/registry/ZooKeeperConfigCenter.h"
 #include "minirpc/registry/ZooKeeperDiscovery.h"
 #include "minirpc/rpc/CallOptions.h"
+#include "minirpc/trace/TraceContext.h"
 
 #include <chrono>
 #include <cstddef>
@@ -126,7 +133,18 @@ int main(int argc,char* argv[]){
 
         LoopThread loop_thread;
         cluster::ChannelManager channels(loop_thread.Loop());
+        cluster::RoundRobin round_robin;
         loadbalance::P2cEwmaLoadBalancer load_balancer;
+        log::LoggerOptions logger_options;
+        logger_options.file_path="logs/registry_client.log";
+        log::AsyncLogger logger(logger_options);
+
+        // 配置回调会引用load_balancer，因此配置中心后构造、先析构。
+        registry::ZooKeeperConfigCenter config_center(zk_client);
+        config_center.SetErrorCallback([](const std::string& error){
+            std::cerr<<"config error: "<<error<<'\n';
+        });
+        config_center.WatchService(kServiceName);
 
         health::ActiveHealthCheckOptions health_options;
         health_options.interval=std::chrono::seconds(2);
@@ -169,20 +187,51 @@ int main(int argc,char* argv[]){
             health_options
         );
 
-        rpc::CallOptions call_options;
-        call_options.idempotent=true;
-        call_options.timeout=std::chrono::milliseconds(1200);
+        auto config_listener=config_center.Subscribe(
+            kServiceName,
+            [&load_balancer,health_options](
+                config::ConfigStore::Snapshot snapshot
+            )mutable{
+                health::EndpointStateOptions endpoint_options;
+                endpoint_options.failure_threshold=
+                    snapshot->failure_threshold;
+                endpoint_options.ewma_alpha=snapshot->ewma_alpha;
+                load_balancer.UpdateOptions(endpoint_options);
+
+                health_options.interval=
+                    snapshot->health_check_interval;
+                load_balancer.GetHealthChecker().
+                    UpdateActiveOptions(health_options);
+            }
+        );
 
         for(std::size_t request=1;
             request<=arguments.requests;
             ++request){
             registry::DiscoveryResult discovered=
                 discovery.Resolve(kServiceName);
-            auto selection=load_balancer.Select(
-                discovered.providers
-            );
+            auto runtime_config=config_center.Get(kServiceName);
 
-            if(!selection.has_value()){
+            std::optional<
+                loadbalance::P2cEwmaLoadBalancer::Selection
+            > selection;
+            std::optional<cluster::Endpoint> selected_endpoint;
+
+            if(runtime_config->load_balancer==
+               config::LoadBalancerAlgorithm::RoundRobin){
+                selected_endpoint=round_robin.Select(
+                    discovered.providers
+                );
+            }else{
+                selection=load_balancer.Select(
+                    discovered.providers
+                );
+                if(selection){
+                    selected_endpoint=selection->GetEndpoint();
+                }
+            }
+
+            if(!selected_endpoint.has_value()){
                 const char* state=
                     discovered.status==
                         registry::DiscoveryStatus::NoProvider
@@ -191,25 +240,45 @@ int main(int argc,char* argv[]){
                          <<" discovery="<<state
                          <<std::endl;
             }else{
-                cluster::Endpoint endpoint=
-                    selection->GetEndpoint();
+                cluster::Endpoint endpoint=*selected_endpoint;
+                trace::TraceContext root_trace=
+                    trace::CreateRootTrace();
+                trace::TraceScope trace_scope(root_trace);
+                MINIRPC_LOG_INFO(
+                    logger,
+                    "calling "+std::string(kServiceName)+'.'+
+                    kMethodName+" endpoint="+endpoint.ToString()
+                );
                 auto pool=channels.GetOrCreate(endpoint);
                 auto started_at=Clock::now();
                 protocol::RpcMessage response;
+                rpc::CallOptions call_options;
+                call_options.idempotent=true;
+                call_options.timeout=
+                    runtime_config->default_timeout;
+                cluster::RetryPolicy retry_policy(
+                    static_cast<std::size_t>(
+                        runtime_config->retry_count
+                    )+1,
+                    std::chrono::milliseconds(10)
+                );
 
                 try{
                     response=pool->Call(
                         kServiceName,
                         kMethodName,
                         {},
-                        call_options
+                        call_options,
+                        retry_policy
                     );
                 }catch(...){
                     auto latency=
                         std::chrono::duration_cast<
                             std::chrono::microseconds
                         >(Clock::now()-started_at);
-                    selection->CompleteFailure(latency);
+                    if(selection){
+                        selection->CompleteFailure(latency);
+                    }
                     throw;
                 }
 
@@ -217,16 +286,33 @@ int main(int argc,char* argv[]){
                     std::chrono::duration_cast<
                         std::chrono::microseconds
                     >(Clock::now()-started_at);
-                if(IsEndpointFailure(response.meta.status_code)){
-                    selection->CompleteFailure(latency);
-                }else{
-                    selection->CompleteSuccess(latency);
+                if(selection){
+                    if(IsEndpointFailure(response.meta.status_code)){
+                        selection->CompleteFailure(latency);
+                    }else{
+                        selection->CompleteSuccess(latency);
+                    }
                 }
+
+                MINIRPC_LOG_INFO(
+                    logger,
+                    "completed "+std::string(kServiceName)+'.'+
+                    kMethodName+" endpoint="+endpoint.ToString()+
+                    " status="+std::to_string(
+                        static_cast<int>(
+                            response.meta.status_code
+                        )
+                    )
+                );
 
                 std::cout<<"request="<<request
                          <<" selected="<<endpoint.ToString()
                          <<" providers="
-                         <<discovered.providers->size();
+                         <<discovered.providers->size()
+                         <<" lb="
+                         <<config::ToString(
+                             runtime_config->load_balancer
+                         );
 
                 if(response.meta.status_code==
                    protocol::StatusCode::Ok){
@@ -241,8 +327,10 @@ int main(int argc,char* argv[]){
             std::this_thread::sleep_for(arguments.interval);
         }
 
-        load_balancer.GetHealthChecker().Stop();
+        config_center.Unsubscribe(config_listener);
         zk_client->Close();
+        load_balancer.GetHealthChecker().Stop();
+        logger.Stop();
         return 0;
     }catch(const std::exception& error){
         std::cerr<<"registry client error: "

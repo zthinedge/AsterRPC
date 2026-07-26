@@ -7,9 +7,9 @@
 
 namespace minirpc::health{
 
-namespace{
-
-void ValidateOptions(const EndpointStateOptions& options){
+void ValidateEndpointStateOptions(
+    const EndpointStateOptions& options
+){
     if(!std::isfinite(options.weight)||options.weight<=0.0){
         throw std::invalid_argument("endpoint weight must be positive");
     }
@@ -42,6 +42,8 @@ void ValidateOptions(const EndpointStateOptions& options){
     }
 }
 
+namespace{
+
 double ToMicros(std::chrono::microseconds latency)noexcept{
     return static_cast<double>(std::max<std::int64_t>(
         latency.count(),
@@ -57,7 +59,7 @@ EndpointState::EndpointState(
 ):endpoint_(std::move(endpoint)),
   options_(options),
   ewma_latency_us_(ToMicros(options.initial_latency)){
-    ValidateOptions(options_);
+    ValidateEndpointStateOptions(options_);
 }
 
 const cluster::Endpoint& EndpointState::GetEndpoint()const noexcept{
@@ -237,6 +239,7 @@ EndpointStateSnapshot EndpointState::Snapshot(TimePoint now){
     snapshot.weight=options_.weight;
     snapshot.failure_penalty_us=penalty;
     snapshot.score=score;
+    snapshot.has_latency_sample=has_latency_sample_;
     snapshot.selectable=
         status_==HealthStatus::Healthy||
         status_==HealthStatus::Suspect||
@@ -252,6 +255,24 @@ void EndpointState::SetWeight(double weight){
 
     std::lock_guard<std::mutex> lock(mutex_);
     options_.weight=weight;
+}
+
+void EndpointState::UpdateOptions(
+    EndpointStateOptions options,
+    TimePoint now
+){
+    ValidateEndpointStateOptions(options);
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    options_=options;
+
+    if(status_==HealthStatus::Unhealthy){
+        retry_at_=now+options_.cooldown;
+    }else if((status_==HealthStatus::Healthy||
+              status_==HealthStatus::Suspect)&&
+             consecutive_failures_>=options_.failure_threshold){
+        MarkUnhealthy(now);
+    }
 }
 
 void EndpointState::RefreshHealth(TimePoint now)noexcept{

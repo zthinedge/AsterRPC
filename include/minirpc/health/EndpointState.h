@@ -31,6 +31,10 @@ struct EndpointStateOptions{
     std::chrono::milliseconds cooldown{5000};
 };
 
+void ValidateEndpointStateOptions(
+    const EndpointStateOptions& options
+);
+
 struct EndpointStateSnapshot{
     HealthStatus status=HealthStatus::Healthy;
     double ewma_latency_us=0.0;
@@ -39,6 +43,7 @@ struct EndpointStateSnapshot{
     double weight=1.0;
     double failure_penalty_us=0.0;
     double score=0.0;
+    bool has_latency_sample=false;
     bool selectable=false;
 };
 
@@ -85,6 +90,10 @@ public:
         TimePoint now=Clock::now()
     );
 
+    void UpdateOptions(
+        EndpointStateOptions options,
+        TimePoint now=Clock::now()
+    );
     void SetWeight(double weight);
 
 private:

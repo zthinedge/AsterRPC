@@ -42,6 +42,7 @@ AsterRPC 覆盖了一次 RPC 调用从非阻塞网络 I/O、二进制协议编�
 | 连接管理 | 连接池 | ✅ |
 | 可观测性 | TraceContext、异步日志与方法级 Metrics | ✅ |
 | 服务发现 | 可选的 ZooKeeper 服务注册与发现 | ✅ |
+| 配置中心 | ZooKeeper 全局/服务级配置热更新 | ✅ |
 | 负载均衡 | Round Robin | ✅ |
 | 负载均衡 | P2C-EWMA | ✅ |
 | 可靠性 | 主动健康检查与实例熔断 | ✅ |
@@ -81,6 +82,7 @@ RPC 层      RpcClient / RpcServer / PendingCalls / ServiceDispatcher
 - CMake 3.22+
 - 支持 C++17 的 GCC 或 Clang
 - Git
+- nlohmann/json
 
 > 如果系统中没有安装 Protobuf，CMake 会自动下载并编译，
 > 因此首次构建需要网络连接，耗时也会更长。
@@ -130,9 +132,12 @@ cmake --build build -j
 然后运行：
 
 ```bash
-./build/registry_server
-./build/registry_client
+./build/registry_server 9001
+./build/registry_client 127.0.0.1:2181
 ```
+
+服务注册、动态发现和配置热更新的节点格式与验收步骤见
+[ZooKeeper 文档](docs/ZOOKEEPER.md)。
 
 ## RPC 调用链
 

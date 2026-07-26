@@ -1,5 +1,6 @@
 #include "minirpc/cluster/Endpoint.h"
 #include "minirpc/registry/ZooKeeperClient.h"
+#include "minirpc/registry/ZooKeeperConfigCenter.h"
 #include "minirpc/registry/ZooKeeperDiscovery.h"
 #include "minirpc/registry/ZooKeeperProvider.h"
 
@@ -37,6 +38,27 @@ void TestProviderPaths(){
     try{
         registry::ZooKeeperProvider::ProviderParentPath(
             "/mini-rpc/services",
+            "bad/service"
+        );
+    }catch(const std::invalid_argument&){
+        rejected=true;
+    }
+    assert(rejected);
+}
+
+void TestConfigPaths(){
+    assert(registry::ZooKeeperConfigCenter::GlobalPath(
+        "/mini-rpc/config"
+    )=="/mini-rpc/config/global");
+    assert(registry::ZooKeeperConfigCenter::ServicePath(
+        "/mini-rpc/config/",
+        "UserService"
+    )=="/mini-rpc/config/UserService");
+
+    bool rejected=false;
+    try{
+        registry::ZooKeeperConfigCenter::ServicePath(
+            "/mini-rpc/config",
             "bad/service"
         );
     }catch(const std::invalid_argument&){
@@ -120,6 +142,21 @@ bool WaitForProviderCount(
     return false;
 }
 
+template<class Predicate>
+bool WaitUntil(
+    Predicate predicate,
+    std::chrono::milliseconds timeout
+){
+    auto deadline=std::chrono::steady_clock::now()+timeout;
+    while(std::chrono::steady_clock::now()<deadline){
+        if(predicate()){
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    return predicate();
+}
+
 void TestRealZooKeeper(const std::string& servers){
     registry::ZooKeeperClientOptions options;
     options.servers=servers;
@@ -132,6 +169,32 @@ void TestRealZooKeeper(const std::string& servers){
         std::chrono::seconds(10)
     );
     assert(connected);
+
+    const std::string watch_probe_path=
+        "/mini-rpc/config/watch-probe";
+    client->EnsurePersistentPath(watch_probe_path);
+    client->SetData(watch_probe_path,"before");
+    std::atomic_bool data_watch_fired{false};
+    assert(
+        client->GetDataAndWatch(
+            watch_probe_path,
+            [&data_watch_fired](){
+                data_watch_fired.store(
+                    true,
+                    std::memory_order_release
+                );
+            }
+        )=="before"
+    );
+    client->SetData(watch_probe_path,"after");
+    assert(WaitUntil(
+        [&data_watch_fired](){
+            return data_watch_fired.load(
+                std::memory_order_acquire
+            );
+        },
+        std::chrono::seconds(2)
+    ));
 
     registry::ZooKeeperProvider provider(client);
     cluster::Endpoint user_endpoint("127.0.0.1",19001);
@@ -185,6 +248,46 @@ void TestRealZooKeeper(const std::string& servers){
     );
     assert(WaitForProviderCount(discovery,"UserService",3));
 
+    client->EnsurePersistentPath("/mini-rpc/config/global");
+    client->SetData(
+        "/mini-rpc/config/global",
+        R"({"default_timeout_ms":1001,"retry_count":2})"
+    );
+    client->EnsurePersistentPath(
+        "/mini-rpc/config/UserService"
+    );
+    client->SetData(
+        "/mini-rpc/config/UserService",
+        "{}"
+    );
+
+    registry::ZooKeeperConfigCenter config_center(client);
+    config_center.WatchService("UserService");
+    assert(WaitUntil(
+        [&config_center](){
+            auto config=config_center.Get("UserService");
+            return config->default_timeout==
+                       std::chrono::milliseconds(1001)&&
+                   config->retry_count==2;
+        },
+        std::chrono::seconds(2)
+    ));
+
+    client->SetData(
+        "/mini-rpc/config/UserService",
+        R"({"default_timeout_ms":201,"ewma_alpha":0.51})"
+    );
+    assert(WaitUntil(
+        [&config_center](){
+            auto config=config_center.Get("UserService");
+            return config->default_timeout==
+                       std::chrono::milliseconds(201)&&
+                   config->retry_count==2&&
+                   config->ewma_alpha==0.51;
+        },
+        std::chrono::seconds(2)
+    ));
+
     client->Close();
 }
 
@@ -192,6 +295,7 @@ void TestRealZooKeeper(const std::string& servers){
 
 int main(){
     TestProviderPaths();
+    TestConfigPaths();
     TestOptionValidation();
     TestDisconnectedClientLifecycle();
     TestDiscoveryNotReady();
