@@ -69,7 +69,8 @@ flowchart TB
 ```text
 应用层      Stub / Service 实现
 RPC 层      RpcClient / RpcServer / PendingCalls / ServiceDispatcher
-协议层      RpcMessage / RpcCodec / Protobuf
+业务绑定层  Stub / Adapter / Protobuf
+协议层      RpcMessage / RpcCodec
 传输层      TcpConnection / Buffer / Channel / EventLoop
 系统层      epoll / eventfd / timerfd / non-blocking sockets
 ```
@@ -149,5 +150,17 @@ Gateway 启动后可访问 `http://127.0.0.1:8080/admin` 查看内置管理页�
 
 ```text
 调用 Stub 方法
+  → Protobuf 将请求对象编码为 payload
   → RpcClient 创建请求并注册 PendingCall
-  → RpcCodec 序列化消息
+  → RpcCodec 将 RpcMessage 编码为 RPC 帧
+  → Reactor 网络层发送
+  → RpcServer 解码并交给 ServiceDispatcher
+  → Adapter 将 payload 解码为 Protobuf 请求对象
+  → Service 实现处理请求并返回响应
+  → 客户端按 request_id 匹配 PendingCall
+  → Stub 将响应 payload 解码为 Protobuf 对象
+```
+
+Protobuf 只负责业务对象与 `payload` 的转换；`RpcCodec` 负责
+`RpcMessage` 与网络字节流的转换。框架不设置独立的 `serialization`
+模块，转换代码位于具体服务的 Stub 和 Adapter 中。

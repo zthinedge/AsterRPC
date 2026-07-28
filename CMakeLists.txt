@@ -198,9 +198,6 @@ add_executable(test_event_loop
 add_executable(test_rpc_codec
     tests/protocol/test_rpc_codec.cpp
 )
-add_executable(test_protobuf
-    tests/serialization/test_protobuf.cpp
-)
 add_executable(test_rpc_server
     tests/rpc/test_rpc_server.cpp
 )
@@ -258,9 +255,6 @@ target_link_libraries(test_event_loop PRIVATE
 target_link_libraries(test_rpc_codec PRIVATE
     minirpc
 )
-target_link_libraries(test_protobuf PRIVATE
-    calculator_proto
-)
 target_link_libraries(test_rpc_server PRIVATE
     minirpc
 )
@@ -308,7 +302,6 @@ add_test(NAME test_connector COMMAND test_connector)
 add_test(NAME test_tcp COMMAND test_tcp)
 add_test(NAME test_event_loop COMMAND test_event_loop)
 add_test(NAME test_rpc_codec COMMAND test_rpc_codec)
-add_test(NAME test_protobuf COMMAND test_protobuf)
 add_test(NAME test_rpc_server COMMAND test_rpc_server)
 add_test(NAME test_rpc_client COMMAND test_rpc_client)
 add_test(NAME test_async_logger COMMAND test_async_logger)

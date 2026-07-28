@@ -1,55 +1,29 @@
-# mini-rpc
+# AsterRPC 中文说明
 
-## 1.项目定位
+项目介绍、功能列表和快速开始统一维护在 [README.md](README.md)，详细设计见
+[DESIGN-CN.md](DESIGN-CN.md)，各模块文档见 [docs/](docs/)。
 
-`mini-rpc` 是一个面向 `C++` 后端服务拆分场景的轻量级 `RPC` 框架。
-
-项目实现保持小而可控，但设计边界对标工程化 RPC 框架：参考 `gRPC` 的 `Stub/Channel/Status/Deadline` 思想，参考 `brpc` 对高并发、连接、Buffer、日志和可观测性的重视。第一版不堆功能，优先把协议、调用语义、序列化、网络和日志边界设计正确。
-
-## 2.设计目标
-
-第一版：
-
-1. 自定义 RPC 二进制协议。
-2. 支持 `request_id` 请求响应匹配。
-3. 支持同步调用和超时控制。
-4. 支持服务端方法注册和分发。
-5. 支持 `mini-protobuf` 序列化。
-6. 接入 `AsyncLogger`。
-7. 提供 `UserService` / `OrderService` 示例。
-
-第二版：
-
-1. 异步调用、连接复用、连接池。
-2. 服务发现、轮询负载均衡、失败重试。
-3. metrics 统计和压测报告。
-
-第三版：
-
-1. HTTP 网关、配置中心、健康检查。
-2. 服务注册中心、管理页面。
-3. `trace_id` 链路追踪。
-
-## 3.整体架构
-
-详细设计见：[DESIGN-CN.md](./DESIGN-CN.md)
+## 分层边界
 
 ```text
-业务层    
-RPC接口层    
-RPC调用层    
-序列化层     
-mini-protobuf
-
----
-协议层   
-RPCMessage<-->bytes
-
----   
-网络层    
-TCP /EventLoop /Buffer
-
----
-基础组件     
-ThreadPool /AsyncLogger /Timer
+业务层      CalculatorServiceImpl
+业务绑定层  CalculatorStub / CalculatorServiceAdapter / Protobuf
+RPC 层      RpcClient / RpcServer / PendingCalls / ServiceDispatcher
+协议层      RpcMessage / RpcCodec
+网络层      TcpConnection / EventLoop / Buffer
+系统层      epoll / eventfd / timerfd / non-blocking sockets
 ```
+
+项目没有独立的序列化模块。生成的 Stub 和服务端 Adapter 直接使用 Protobuf，
+完成业务对象与 `RpcMessage::payload` 之间的转换；`RpcCodec` 只负责 RPC 帧的
+编码和解码，不解析具体业务对象。
+
+## 文档入口
+
+- [总体设计](DESIGN-CN.md)
+- [网络层](docs/NETWORK.md)
+- [协议层](docs/PROTOCOL.md)
+- [项目结构](docs/PROJECT-STRUCTURE-CN.md)
+- [ZooKeeper](docs/ZOOKEEPER.md)
+- [HTTP Gateway](docs/HTTP-GATEWAY.md)
+- [基准测试](docs/BENCHMARK.md)

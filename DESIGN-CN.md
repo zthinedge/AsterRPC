@@ -1,8 +1,8 @@
-# mini-rpc 设计文档
+# AsterRPC 设计文档
 
 ## 1. 版本目标
 
-`mini-rpc` 第一版只做一件事：把一次 C++ 本地方法调用，变成一次基于 TCP 的远程请求和响应。
+`AsterRPC` 第一版只做一件事：把一次 C++ 本地方法调用，变成一次基于 TCP 的远程请求和响应。
 
 第一版范围：
 
@@ -11,7 +11,7 @@
 3. 支持同步调用。
 4. 支持超时控制。
 5. 支持服务端方法注册和分发。
-6. 支持 `mini-protobuf` 序列化。
+6. 使用 Protobuf 编解码业务请求和响应。
 7. 接入 `AsyncLogger`。
 8. 提供 `UserService` / `OrderService` 示例。
 
@@ -39,7 +39,7 @@
 
 ## 2. 对标标准
 
-`mini-rpc` 可以参考 gRPC 和 brpc 的设计思想，但第一版不能直接复制它们的完整功能。对标的重点不是“功能列表一样多”，而是第一版的核心结构不能写死，后续能自然演进。
+`AsterRPC` 可以参考 gRPC 和 brpc 的设计思想，但第一版不能直接复制它们的完整功能。对标的重点不是“功能列表一样多”，而是第一版的核心结构不能写死，后续能自然演进。
 
 第一版需要吸收的思想：
 
@@ -117,8 +117,8 @@ RPC 接口层
 RPC 调用层
   RpcClient / RpcServer / RpcChannel / ServiceRegistry / PendingCalls
 
-序列化层
-  mini-protobuf
+业务绑定层
+  Stub / Adapter / Protobuf
 
 协议层
   RpcMessage / RpcCodec / RpcHeader
@@ -156,7 +156,7 @@ flowchart TB
     end
 
     subgraph Common["公共基础组件"]
-        Proto["mini-protobuf"]
+        Proto["Protobuf"]
         Logger["AsyncLogger"]
         Timer["Timer"]
     end
@@ -197,7 +197,7 @@ flowchart TB
 
 ```text
 UserServiceStub::GetUser(req, resp)
-  -> mini-protobuf encode(req) 得到 request_payload
+  -> Protobuf encode(req) 得到 request_payload
   -> RpcChannel::Call("UserService", "GetUser", request_payload)
   -> RpcClient 生成 request_id
   -> PendingCalls 保存 request_id 对应的等待对象
@@ -249,7 +249,7 @@ sequenceDiagram
     participant Server as 服务端
 
     Biz->>Stub: GetUser(req, resp)
-    Stub->>Stub: mini-protobuf encode(req)
+    Stub->>Stub: Protobuf encode(req)
     Stub->>Channel: Call(service, method, request_payload, timeout_ms)
     Channel->>Client: Call(...)
     Client->>Client: 生成 request_id
@@ -266,7 +266,7 @@ sequenceDiagram
     Pending-->>Client: 唤醒等待线程
     Client-->>Channel: response_payload / error
     Channel-->>Stub: response_payload / error
-    Stub->>Stub: mini-protobuf decode(resp)
+    Stub->>Stub: Protobuf decode(resp)
     Stub-->>Biz: 返回成功或失败
 ```
 
@@ -321,9 +321,9 @@ TCP 是字节流，不是消息队列。一次 `send` 不等于一次 `recv`：
 
 ```text
 uint32 magic        // 固定值，例如 0x4d525043，表示 "MRPC"
-uint8  version      // 当前deadline协议为 2
+uint8  version      // 当前协议版本为 3
 uint8  message_type // REQUEST 或 RESPONSE
-uint8  codec        // 第一版为 MINI_PROTOBUF
+uint8  codec        // 当前为 PROTOBUF
 uint8  flags        // 第一版填 0，后续可表示压缩、校验、trace 等扩展
 uint64 request_id   // 请求响应匹配
 uint32 meta_len     // meta 字节数
@@ -332,7 +332,7 @@ uint32 payload_len  // payload 字节数
 
 这个头是 24 字节。实现时不要直接 `reinterpret_cast<RpcHeader*>`，而是手动按网络字节序读写每个字段。
 
-`meta` 放 RPC 元信息，第一版可以用 mini-protobuf 编码：
+`meta` 放 RPC 元信息，由 `RpcMetaCodec` 使用定长整数和长度前缀字符串编码：
 
 ```text
 service_name
@@ -342,7 +342,7 @@ error_text
 deadline_us
 ```
 
-`payload` 放业务请求或响应，也用 mini-protobuf 编码。
+`payload` 放业务请求或响应，由具体 Stub/Adapter 使用 Protobuf 编解码。
 
 协议设计要注意：
 
@@ -532,7 +532,7 @@ using RpcHandler = std::function<bool(
 3. 支持同步调用
 4. 支持超时控制
 5. 支持服务端方法注册和分发
-6. 支持 mini-protobuf 序列化
+6. 使用 Protobuf 编解码业务请求和响应
 7. 接入 AsyncLogger
 8. 提供 UserService / OrderService 示例
 第二版
@@ -574,9 +574,9 @@ GetUserResponse -> response_payload
 4. 业务适配器负责类型转换，框架只负责传输、匹配、分发和错误。
 5. 后续新增 `ProductService` 时，只应该新增业务 message、stub、adapter 和注册代码，不应该修改 RPC 核心类。
 
-## 9. mini-protobuf 序列化边界
+## 9. Protobuf 业务绑定边界
 
-第一版所有业务 request/response 都使用 `mini-protobuf`：
+业务 request/response 使用 Protobuf：
 
 ```text
 GetUserRequest
@@ -585,13 +585,13 @@ CreateOrderRequest
 CreateOrderResponse
 ```
 
-序列化层负责：
+Stub 和 Adapter 负责：
 
 1. 业务对象编码成 bytes。
 2. bytes 解码成业务对象。
 3. 字段缺失、未知字段、类型错误的处理。
 
-序列化层不负责：
+Protobuf 业务绑定不负责：
 
 1. TCP 收发。
 2. RPC 方法分发。
@@ -697,7 +697,7 @@ GetOrder(order_id) -> user_id, item_id, count, status
 2. `RpcCodec` 正确处理半包、粘包。
 3. 同步调用支持超时。
 4. 服务端支持注册和分发多个服务方法。
-5. request/response 使用 mini-protobuf。
+5. request/response 使用 Protobuf。
 6. 关键事件接入 AsyncLogger。
 7. UserService / OrderService 跑通。
 8. 预留协议版本、flags、codec、status、timeout 等扩展点。
@@ -720,7 +720,7 @@ GetOrder(order_id) -> user_id, item_id, count, status
 按这个顺序实现，风险最低：
 
 1. `RpcHeader/RpcMessage/RpcCodec`，先写半包、粘包、非法长度测试。
-2. `mini-protobuf` 接入业务 request/response。
+2. 在 Stub/Adapter 中接入 Protobuf request/response。
 3. `ServiceRegistry`，先不用网络，直接测试服务分发。
 4. `RpcClient/RpcServer` 跑通单个 `UserService.GetUser`。
 5. 加 `request_id` 和 `PendingCalls`。
