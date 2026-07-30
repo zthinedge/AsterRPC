@@ -1,5 +1,7 @@
 #include "minirpc/net/TcpConnection.h"
 
+#include "minirpc/net/EventLoop.h"
+
 #include <cerrno>
 #include <sys/socket.h>
 #include <utility>
@@ -37,10 +39,45 @@ TcpConnection::~TcpConnection(){
 }
 //连接对应的channel为可读
 void TcpConnection::Start(){
+    if(!loop_->IsInLoopThread()){
+        std::weak_ptr<TcpConnection> weak=weak_from_this();
+        loop_->QueueInLoop([weak](){
+            if(auto connection=weak.lock()){
+                connection->StartInLoop();
+            }
+        });
+        return;
+    }
+
+    StartInLoop();
+}
+
+void TcpConnection::StartInLoop(){
+    if(closed_){
+        return;
+    }
     channel_.EnableReading();
 }
 
 void TcpConnection::Send(const std::string& data){
+    if(data.empty()){
+        return;
+    }
+
+    if(!loop_->IsInLoopThread()){
+        std::weak_ptr<TcpConnection> weak=weak_from_this();
+        loop_->QueueInLoop([weak,data](){
+            if(auto connection=weak.lock()){
+                connection->SendInLoop(data);
+            }
+        });
+        return;
+    }
+
+    SendInLoop(data);
+}
+
+void TcpConnection::SendInLoop(const std::string& data){
     if(data.empty()||closed_){
         return;
     }
@@ -88,6 +125,20 @@ void TcpConnection::Send(const std::string& data){
 }
 
 void TcpConnection::Shutdown(){
+    if(!loop_->IsInLoopThread()){
+        std::weak_ptr<TcpConnection> weak=weak_from_this();
+        loop_->QueueInLoop([weak](){
+            if(auto connection=weak.lock()){
+                connection->ShutdownInLoop();
+            }
+        });
+        return;
+    }
+
+    ShutdownInLoop();
+}
+
+void TcpConnection::ShutdownInLoop(){
     if(closed_){
         return;
     }
@@ -99,6 +150,20 @@ void TcpConnection::Shutdown(){
 }
 
 void TcpConnection::Close(){
+    if(!loop_->IsInLoopThread()){
+        std::weak_ptr<TcpConnection> weak=weak_from_this();
+        loop_->QueueInLoop([weak](){
+            if(auto connection=weak.lock()){
+                connection->CloseInLoop();
+            }
+        });
+        return;
+    }
+
+    CloseInLoop();
+}
+
+void TcpConnection::CloseInLoop(){
     HandleClose();
 }
 
@@ -112,6 +177,15 @@ void TcpConnection::SetCloseCallback(CloseCallback cb){
 
 int TcpConnection::Fd()const noexcept{
     return socket_.GetFd();
+}
+
+EventLoop* TcpConnection::OwnerLoop()const noexcept{
+    return loop_;
+}
+
+std::weak_ptr<TcpConnection>
+TcpConnection::WeakFromThis()noexcept{
+    return weak_from_this();
 }
 
 std::weak_ptr<const int>

@@ -1,16 +1,25 @@
 #pragma once
 
 #include "minirpc/net/Acceptor.h"
+#include "minirpc/net/EventLoopThreadPool.h"
 #include "minirpc/net/TcpConnection.h"
 
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 namespace minirpc::net{
 
 class EventLoop;
 class InetAddress;
+
+struct TcpServerOptions{
+    std::size_t io_threads=0;
+    IoLoopLoadBalance io_load_balance=
+        IoLoopLoadBalance::RoundRobin;
+};
 
 class TcpServer{
 public:
@@ -18,23 +27,38 @@ public:
     using ConnectionCallback=std::function<void()>;
     using CloseCallback=std::function<void()>;
 
-    TcpServer(EventLoop*loop,const InetAddress& addr);
-    ~TcpServer()=default;
+    TcpServer(
+        EventLoop* loop,
+        const InetAddress& addr,
+        TcpServerOptions options={}
+    );
+    ~TcpServer();
 
     void Start();
     void SetMessageCallback(MessageCallback cb);
     void SetConnectionCallback(ConnectionCallback cb);
     void SetCloseCallback(CloseCallback cb);
 
+    std::size_t IoThreadCount()const noexcept;
+    std::vector<std::size_t> IoConnectionCounts()const;
+
 private:
+    struct ConnectionEntry{
+        std::shared_ptr<TcpConnection> connection;
+        std::size_t worker_index=
+            EventLoopThreadPool::kBaseLoopIndex;
+    };
+
     void HandleNewConnection(Socket socket,const InetAddress& peer_addr);
 
     void HandleClose(TcpConnection* connection);
+    void CloseAllConnections()noexcept;
 
     EventLoop* loop_;
     Acceptor acceptor_;
+    EventLoopThreadPool io_pool_;
 
-    std::unordered_map<int,std::unique_ptr<TcpConnection>> connections_;
+    std::unordered_map<int,ConnectionEntry> connections_;
 
     MessageCallback message_callback_;
     ConnectionCallback connection_callback_;

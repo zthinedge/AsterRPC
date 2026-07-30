@@ -8,38 +8,45 @@
 #include "minirpc/trace/TraceContext.h"
 
 #include <arpa/inet.h>
-#include <cassert>
 #include <cerrno>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <future>
 #include <netinet/in.h>
 #include <string>
 #include <sys/socket.h>
 #include <thread>
+#include <unordered_map>
 #include <unistd.h>
 
 using namespace minirpc;
 
 namespace{
 
+void Check(bool condition){
+    if(!condition){
+        std::abort();
+    }
+}
+
 std::uint16_t FindFreePort(){
     int fd=::socket(AF_INET,SOCK_STREAM,0);
-    assert(fd!=-1);
+    Check(fd!=-1);
 
     sockaddr_in addr{};
     addr.sin_family=AF_INET;
     addr.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
     addr.sin_port=0;
 
-    assert(::bind(
+    Check(::bind(
         fd,
         reinterpret_cast<sockaddr*>(&addr),
         sizeof(addr)
     )==0);
 
     socklen_t len=sizeof(addr);
-    assert(::getsockname(
+    Check(::getsockname(
         fd,
         reinterpret_cast<sockaddr*>(&addr),
         &len
@@ -85,17 +92,17 @@ void SendAll(int fd,const std::string& data){
             continue;
         }
 
-        assert(false);
+        Check(false);
     }
 }
 
 int Connect(std::uint16_t port){
     int fd=::socket(AF_INET,SOCK_STREAM,0);
-    assert(fd!=-1);
+    Check(fd!=-1);
 
     timeval timeout{};
     timeout.tv_sec=2;
-    assert(::setsockopt(
+    Check(::setsockopt(
         fd,
         SOL_SOCKET,
         SO_RCVTIMEO,
@@ -108,7 +115,7 @@ int Connect(std::uint16_t port){
     addr.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
     addr.sin_port=htons(port);
 
-    assert(::connect(
+    Check(::connect(
         fd,
         reinterpret_cast<sockaddr*>(&addr),
         sizeof(addr)
@@ -136,7 +143,7 @@ protocol::RpcMessage ReadOne(
             return response;
         }
 
-        assert(status==protocol::DecodeStatus::NeedMoreData);
+        Check(status==protocol::DecodeStatus::NeedMoreData);
 
         char data[4096];
         ssize_t size=::recv(fd,data,sizeof(data),0);
@@ -145,7 +152,7 @@ protocol::RpcMessage ReadOne(
             continue;
         }
 
-        assert(size>0);
+        Check(size>0);
         buffer->Append(data,static_cast<std::size_t>(size));
     }
 }
@@ -168,22 +175,22 @@ void TestDispatcher(){
     );
 
     protocol::RpcMessage response=dispatcher.Dispatch(request);
-    assert(response.message_type==protocol::MessageType::Response);
-    assert(response.request_id==request.request_id);
-    assert(response.meta.status_code==protocol::StatusCode::Ok);
-    assert(response.payload=="result:1+2");
+    Check(response.message_type==protocol::MessageType::Response);
+    Check(response.request_id==request.request_id);
+    Check(response.meta.status_code==protocol::StatusCode::Ok);
+    Check(response.payload=="result:1+2");
 
     request.meta.service_name="UnknownService";
     response=dispatcher.Dispatch(request);
-    assert(response.request_id==request.request_id);
-    assert(response.meta.status_code==
+    Check(response.request_id==request.request_id);
+    Check(response.meta.status_code==
            protocol::StatusCode::ServiceNotFound);
 
     request.meta.service_name="CalculatorService";
     request.meta.method_name="UnknownMethod";
     response=dispatcher.Dispatch(request);
-    assert(response.request_id==request.request_id);
-    assert(response.meta.status_code==
+    Check(response.request_id==request.request_id);
+    Check(response.meta.status_code==
            protocol::StatusCode::MethodNotFound);
 }
 
@@ -192,25 +199,39 @@ void TestRpcServer(){
     std::promise<net::EventLoop*>server_ready;
     std::promise<rpc::RpcServer*>rpc_server_ready;
     std::promise<trace::TraceContext>handler_trace;
+    std::promise<std::thread::id>server_thread_id;
+    std::promise<std::thread::id>handler_thread_id;
 
     std::thread server_thread([
         port,
         &server_ready,
         &rpc_server_ready,
-        &handler_trace
+        &handler_trace,
+        &server_thread_id,
+        &handler_thread_id
     ](){
         net::EventLoop loop;
         net::InetAddress address("127.0.0.1",port);
-        rpc::RpcServer server(&loop,address);
+        rpc::RpcServerOptions options;
+        options.tcp.io_threads=2;
+        options.tcp.io_load_balance=
+            net::IoLoopLoadBalance::LeastConnections;
+        options.business_threads=2;
+        rpc::RpcServer server(&loop,address,options);
+        server_thread_id.set_value(std::this_thread::get_id());
 
         server.RegisterMethod(
             "EchoService",
             "Echo",
-            [&handler_trace](const std::string& payload){
+            [
+                &handler_trace,
+                &handler_thread_id
+            ](const std::string& payload){
                 const trace::TraceContext* context=
                     trace::CurrentTraceContext();
-                assert(context!=nullptr);
+                Check(context!=nullptr);
                 handler_trace.set_value(*context);
+                handler_thread_id.set_value(std::this_thread::get_id());
                 return "reply:"+payload;
             }
         );
@@ -246,28 +267,31 @@ void TestRpcServer(){
 
     net::Buffer response_buffer;
 
-    protocol::RpcMessage response=ReadOne(fd,&response_buffer);
-    assert(response.request_id==101);
-    assert(response.meta.status_code==protocol::StatusCode::Ok);
-    assert(response.payload=="reply:hello");
-    assert(response.meta.trace_id==first_request.meta.trace_id);
-    assert(response.meta.parent_span_id==first_request.meta.span_id);
-    assert(!response.meta.span_id.empty());
-    assert(response.meta.span_id!=first_request.meta.span_id);
+    std::unordered_map<std::uint64_t,protocol::RpcMessage> responses;
+    for(std::size_t index=0;index<3;++index){
+        protocol::RpcMessage received=ReadOne(fd,&response_buffer);
+        responses.emplace(received.request_id,std::move(received));
+    }
+
+    const protocol::RpcMessage& first_response=responses.at(101);
+    Check(first_response.meta.status_code==protocol::StatusCode::Ok);
+    Check(first_response.payload=="reply:hello");
+    Check(first_response.meta.trace_id==first_request.meta.trace_id);
+    Check(first_response.meta.parent_span_id==first_request.meta.span_id);
+    Check(!first_response.meta.span_id.empty());
+    Check(first_response.meta.span_id!=first_request.meta.span_id);
 
     trace::TraceContext observed=handler_trace.get_future().get();
-    assert(observed.trace_id==first_request.meta.trace_id);
-    assert(observed.span_id==response.meta.span_id);
-    assert(observed.parent_span_id==first_request.meta.span_id);
+    Check(handler_thread_id.get_future().get()!=
+           server_thread_id.get_future().get());
+    Check(observed.trace_id==first_request.meta.trace_id);
+    Check(observed.span_id==first_response.meta.span_id);
+    Check(observed.parent_span_id==first_request.meta.span_id);
 
-    response=ReadOne(fd,&response_buffer);
-    assert(response.request_id==102);
-    assert(response.meta.status_code==
+    Check(responses.at(102).meta.status_code==
            protocol::StatusCode::ServiceNotFound);
 
-    response=ReadOne(fd,&response_buffer);
-    assert(response.request_id==103);
-    assert(response.meta.status_code==
+    Check(responses.at(103).meta.status_code==
            protocol::StatusCode::MethodNotFound);
 
     SendAll(
@@ -280,10 +304,10 @@ void TestRpcServer(){
         ))
     );
 
-    response=ReadOne(fd,&response_buffer);
-    assert(response.request_id==200);
-    assert(response.meta.status_code==protocol::StatusCode::Ok);
-    assert(response.payload==
+    protocol::RpcMessage response=ReadOne(fd,&response_buffer);
+    Check(response.request_id==200);
+    Check(response.meta.status_code==protocol::StatusCode::Ok);
+    Check(response.payload==
            health::HealthService::ServingPayload());
 
     protocol::RpcMessage expired_request=MakeRequest(
@@ -296,27 +320,32 @@ void TestRpcServer(){
     SendAll(fd,codec.Encode(expired_request));
 
     response=ReadOne(fd,&response_buffer);
-    assert(response.request_id==104);
-    assert(response.meta.status_code==protocol::RpcError::Timeout);
-    assert(response.payload.empty());
+    Check(response.request_id==104);
+    Check(response.meta.status_code==protocol::RpcError::Timeout);
+    Check(response.payload.empty());
 
     auto metrics=server->GetMetrics();
-    assert(metrics.total_requests==5);
-    assert(metrics.successful_requests==2);
-    assert(metrics.failed_requests==3);
-    assert(metrics.timeout_requests==1);
-    assert(metrics.inflight_requests==0);
-    assert(metrics.active_connections==1);
-    assert(metrics.latency_samples==5);
+    Check(metrics.total_requests==5);
+    Check(metrics.successful_requests==2);
+    Check(metrics.failed_requests==3);
+    Check(metrics.timeout_requests==1);
+    Check(metrics.inflight_requests==0);
+    Check(metrics.active_connections==1);
+    Check(metrics.latency_samples==5);
+    Check(server->IoThreadCount()==2);
+    Check(server->BusinessThreadCount()==2);
+    auto connection_counts=server->IoConnectionCounts();
+    Check(connection_counts.size()==2);
+    Check(connection_counts[0]+connection_counts[1]==1);
 
     auto echo_metrics=server->GetMethodMetrics(
         "EchoService",
         "Echo"
     );
-    assert(echo_metrics.total_requests==2);
-    assert(echo_metrics.successful_requests==1);
-    assert(echo_metrics.timeout_requests==1);
-    assert(server->GetAllMethodMetrics().size()==4);
+    Check(echo_metrics.total_requests==2);
+    Check(echo_metrics.successful_requests==1);
+    Check(echo_metrics.timeout_requests==1);
+    Check(server->GetAllMethodMetrics().size()==4);
 
     std::string invalid=codec.Encode(
         MakeRequest(105,"EchoService","Echo","bad")
@@ -325,7 +354,7 @@ void TestRpcServer(){
     SendAll(fd,invalid);
 
     char data=0;
-    assert(::recv(fd,&data,1,0)==0);
+    Check(::recv(fd,&data,1,0)==0);
 
     ::close(fd);
     loop->Stop();

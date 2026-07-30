@@ -12,7 +12,8 @@ namespace minirpc::net{
 
 class EventLoop;
 
-class TcpConnection{
+class TcpConnection:
+    public std::enable_shared_from_this<TcpConnection>{
 public:
     using MessageCallback=
         std::function<void(TcpConnection*,Buffer*)>;
@@ -32,9 +33,16 @@ public:
     void SetCloseCallback(CloseCallback cb);
 
     int Fd()const noexcept;
+    EventLoop* OwnerLoop()const noexcept;
+    std::weak_ptr<TcpConnection> WeakFromThis()noexcept;
     std::weak_ptr<const int> LifetimeToken()const noexcept;
 
 private:
+    void StartInLoop();
+    void SendInLoop(const std::string& data);
+    void ShutdownInLoop();
+    void CloseInLoop();
+
     void HandleRead();
     void HandleWrite();
     void HandleClose();

@@ -44,7 +44,7 @@ private:
 
     EventLoop* loop_;
     Connector connector_;
-    std::unique_ptr<TcpConnection> connection_;
+    std::shared_ptr<TcpConnection> connection_;
 
     ConnectionCallback connection_callback_;
     CloseCallback close_callback_;

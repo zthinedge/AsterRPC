@@ -1,24 +1,37 @@
 # rpc_bench
 
-先启动提供 `BenchService.Echo` 的示例服务端：
+`rpc_bench` 通过真实的 AsterRPC 客户端连接调用 `BenchService.Echo`。它使用多个
+客户端 EventLoop 和异步流水线维持固定并发，避免同步 Future 和单 EventLoop 限制
+压测能力。
+
+## 快速运行
 
 ```bash
-./build/calculator_server 9000
+cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
+cmake --build build-release -j"$(nproc)"
 ```
 
-再打开另一个终端执行基线压测：
+终端一：
 
 ```bash
-cd build
-./rpc_bench --concurrency 50 --requests 10000 --payload 1024
+./build-release/calculator_server 9000 \
+  --io-threads 4 \
+  --business-threads 0 \
+  --io-balance least-connections
 ```
 
-参数含义：
+终端二：
 
-- `--concurrency`：同时发起请求的工作线程数
-- `--requests`：总请求数
-- `--payload`：每次请求携带的字节数
-- `--host`、`--port`：服务端地址，默认 `127.0.0.1:9000`
+```bash
+./build-release/rpc_bench \
+  --host 127.0.0.1 \
+  --port 9000 \
+  --io-threads 4 \
+  --connections 16 \
+  --concurrency 200 \
+  --requests 500000 \
+  --payload 1024 \
+  --timeout-ms 5000
+```
 
-结果包含成功数、失败数、QPS，以及平均、最小、最大、
-P50、P95、P99 延迟。
+完整的基线对比方法见 [性能测试文档](../docs/BENCHMARK.md)。

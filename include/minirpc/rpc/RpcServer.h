@@ -4,17 +4,31 @@
 #include "minirpc/net/TcpServer.h"
 #include "minirpc/protocol/RpcCodec.h"
 #include "minirpc/rpc/ServiceDispatcher.h"
+#include "minirpc/trace/TraceContext.h"
 
+#include <cstddef>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
 
+namespace minirpc::common{
+class ThreadPool;
+}
+
 namespace minirpc::net{
 class EventLoop;
 class InetAddress;
+class TcpConnection;
 }
 
 namespace minirpc::rpc{
+
+struct RpcServerOptions{
+    net::TcpServerOptions tcp;
+    std::size_t business_threads=0;
+    std::size_t business_queue_capacity=65536;
+};
 
 class RpcServer{
 public:
@@ -22,8 +36,10 @@ public:
 
     RpcServer(
         net::EventLoop* loop,
-        const net::InetAddress& addr
+        const net::InetAddress& addr,
+        RpcServerOptions options={}
     );
+    ~RpcServer();
 
     void RegisterMethod(
         std::string service_name,
@@ -39,6 +55,10 @@ public:
     )const noexcept;
     std::vector<metrics::RpcMethodMetricsSnapshot>
     GetAllMethodMetrics()const;
+    std::size_t IoThreadCount()const noexcept;
+    std::vector<std::size_t> IoConnectionCounts()const;
+    std::size_t BusinessThreadCount()const noexcept;
+    std::size_t PendingBusinessTasks()const;
 
 private:
     void HandleMessage(
@@ -46,10 +66,26 @@ private:
         net::Buffer* buffer
     );
 
+    void ProcessRequest(
+        std::weak_ptr<net::TcpConnection> connection,
+        protocol::RpcMessage request,
+        metrics::RpcMetrics::TimePoint started_at,
+        trace::TraceContext server_span
+    );
+
+    void SendResponse(
+        std::weak_ptr<net::TcpConnection> connection,
+        const protocol::RpcMessage& request,
+        protocol::RpcMessage response,
+        metrics::RpcMetrics::TimePoint started_at,
+        const trace::TraceContext& server_span
+    );
+
     net::TcpServer tcp_server_;
     protocol::RpcCodec codec_;
     ServiceDispatcher dispatcher_;
     metrics::RpcMetrics metrics_;
+    std::unique_ptr<common::ThreadPool> business_pool_;
 };
 
 }

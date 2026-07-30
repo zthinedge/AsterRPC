@@ -1,39 +1,156 @@
-# mini-rpc 网络层设计
+# AsterRPC 网络层设计
 
 ## 1. 网络层职责
-网络层主要是负责服务端和客户端之间的通信。服务端和客户端通过TCP进行数据的传输，网络层则是基于Reactor模式，高并发地处理这些发送的事件。网络层是项目的基座，接收时，网络层把 TCP 字节追加到 Buffer，并通过回调交给协议层解码；发送时，协议层将消息编码成字节，再交给网络层发送
+
+网络层负责客户端与服务端之间的 TCP 通信。接收时，它把 TCP 字节追加到输入
+`Buffer`，再通过消息回调交给协议层；发送时，它接收协议层编码后的字节，并通过
+非阻塞 `send` 写入内核。
+
+网络层不理解 `RpcMessage`、服务名或方法名，只处理连接、字节流和 IO 事件。
 
 ## 2. 组件关系
-Socket在bind/connect时使用InetAddress,Tcpconnnection拥有Socket，Channel，Buffer，EventLoop通过Poller管理一组channel，TcpServer持有一个非拥有型EventLoop指针，并拥有Acceptor和多个TcpConnection。
 
-## 3. Reactor 事件处理流程
-底层采用Socket TCP进行通信。事件处理为channel触发读事件或写事件 执行对应的回调函数。
+```text
+                         TcpServer
+                            |
+                  +---------+----------+
+                  |                    |
+            main EventLoop       EventLoopThreadPool
+                  |                    |
+              Acceptor        sub EventLoop 0..N-1
+                  |                    |
+             listen fd          TcpConnection
+                                      |
+                              Socket + Channel
+                              input/output Buffer
+```
 
-## 4. Socket 和 InetAddress
-InetAddress地址协议类包含IP Port等等。Socket包含一些由socket引申出来的一些函数，比如将fd设置为非阻塞，端口重用，listen，accept，以及send、recv
+- `Socket` 使用 RAII 管理 fd，封装 bind、listen、accept、connect、send 和 recv。
+- `Channel` 描述一个 fd 关注的事件和回调，但不拥有 fd。
+- `Poller` 封装 epoll，返回本轮已就绪的 `Channel`。
+- `EventLoop` 驱动 Poller、事件回调和跨线程待执行任务。
+- `Acceptor` 只负责监听和接收新连接。
+- `TcpConnection` 管理一条已建立连接及其收发缓冲区。
+- `TcpServer` 管理 Acceptor、IO 线程池和所有服务端连接。
 
-## 5. Buffer
-在一个TCP连接中，存在输入缓冲区和输出缓冲区。主要用于处理 TCP 字节流、非阻塞部分读写、业务处理速度与网络速度不一致。通过读下标和写下标来操作vector中的一块缓冲区，这样每一次清理由上层读取过的数据时，只需要移动读下标，相比string优化了性能。当协议层读完缓冲区内容时，读索引和写索引均设置为0
+## 3. 主从 Reactor
 
-## 6. Channel、Poller 和 EventLoop
-EventLoop是用来管理channel的，主要操作是对channel上发生的每一个事件进行处理... Poller则主要是对epoll一些系统函数的封装，以及Poller将触发事件的Channel存在数组中，交给EventLoop。Channel 表示一个 fd 在 EventLoop 中的事件状态，但不拥有也不关闭该 fd，一个Channel对应一个fd，同时管理回调函数，比如监听器的channel读触发监听的功能。一个连接拥有一个channel，以及多个回调。同时事件循环拥有待执行队列，当连接关闭时需要将对应的操作函数放入待执行队列后，在当前一轮处理channel完后立即执行
+主 Reactor 运行在调用 `RpcServer::Start()` 的线程中，只监听 listen fd。新连接到达
+后，`Acceptor` 完成 accept，`TcpServer` 再把该连接分配给一个 sub Reactor。
 
-## 7. Acceptor 和 TcpServer
-Acceptor拥有acceptchannel只要有读事件，就会触发最开始注册的acceptor的回调处理函数，创建一个Socket交给TcpServer，TcpServer创建一个Tcp连接，然后将这个连接存入哈希表进行管理，并注册相关回调函数
+sub Reactor 各自运行在独立的 `EventLoopThread` 中，负责分配给自己的连接，包括：
 
-## 8. Connector 和 TcpClient
-Tcpclient拥有Connector，Connector主要负责连接服务端。
-## 9. TcpConnection 读写流程
-可读事件发生后，Channel 调用 TcpConnection 的读回调，HandleRead 循环 recv 到 EAGAIN，将数据追加到输入缓冲区，再调用消息回调。发送时，如果没有积压数据就先直接 send；发送不完的部分进入输出缓冲区并开启可写事件，HandleWrite 在 Socket 可写后继续发送，全部发送完成后关闭可写事件。
+- 监听连接 fd 的可读、可写、错误和关闭事件；
+- 执行 `TcpConnection` 的读写回调；
+- 管理输入、输出 Buffer；
+- 执行投递到本 EventLoop 的 Functor。
 
-## 10. 连接建立与关闭时序
-客户端调用连接器于服务端的监听器相作用，通过TCP三次握手建立连接。连接建立的时候需要传入参数Socket，同时设置对应的读写回调。
+当 `io_threads` 为 0 时，不创建 sub Reactor，所有连接继续由 main EventLoop
+处理，便于运行单 Reactor 基线和兼容原来的使用方式。
 
-## 11. 线程模型和生命周期约束
-当前采用单 Reactor、单 EventLoop 线程模型。EventLoop 记录创建它的线程，其他线程通过 RunInLoop 或 QueueInLoop 投递任务；任务队列使用互斥锁保护，并通过 eventfd 唤醒阻塞在 epoll_wait 的循环。Stop 同样会写 eventfd，因此可以从其他线程立即唤醒并停止循环。EventLoop 必须比关联的 Channel、TcpServer 和 TcpClient 活得更久。Socket 和 Poller 使用 RAII 在析构时关闭 fd，TcpConnection 由 unique_ptr 管理。连接关闭时通过 QueueInLoop 延迟释放，避免删除正在执行回调的 Channel。
+## 4. IO 连接负载均衡
 
-## 12. 测试方式
-使用 CMake 构建后通过 ctest --test-dir build --output-on-failure 运行测试，当前覆盖 Socket、Buffer、Connector、EventLoop 跨线程投递与停止，以及 TcpClient/TcpServer 端到端收发。
+`EventLoopThreadPool` 支持两种连接分配策略：
 
-## 13. 当前限制
-fd设置成了非阻塞，但是accept可能可以优化成accept4；主从reactor可能性能更好
+- `RoundRobin`：按顺序轮询 sub Reactor，实现简单，分配开销固定。
+- `LeastConnections`：选择当前活动连接数最少的 sub Reactor，连接生命周期差异较大
+  时更均衡。
+
+这里均衡的是“连接归属”，不是对每个 RPC 请求重新选择线程。一条 TCP 连接在整个
+生命周期内固定属于同一个 EventLoop，避免并发操作 Channel、Buffer 和 fd。
+
+## 5. EventLoop 跨线程投递
+
+每个 `EventLoop` 记录所属线程。其他线程不能直接操作它管理的 Channel，而应使用：
+
+- `RunInLoop`：如果当前就在所属线程立即执行，否则加入任务队列；
+- `QueueInLoop`：始终加入任务队列；
+- `eventfd`：写入后唤醒阻塞于 `epoll_wait` 的 EventLoop。
+
+待执行队列由互斥锁保护。EventLoop 会先将任务交换到局部容器，再逐个执行，避免
+执行回调期间长期持锁。`Stop()` 也会写 eventfd，所以跨线程停止能够及时生效。
+
+`TcpConnection::Send`、`Shutdown` 和 `Close` 已封装上述规则：从业务线程调用时，
+操作会自动投递回该连接所属的 IO 线程。
+
+## 6. 业务线程池
+
+网络 IO 与 RPC 业务处理采用不同的线程：
+
+```text
+sub Reactor 收到字节
+  -> RpcCodec 解码
+  -> 请求提交到 ThreadPool
+  -> ServiceDispatcher 调用业务 Handler
+  -> TcpConnection::Send
+  -> 投递回连接所属 sub Reactor
+  -> 非阻塞发送响应
+```
+
+业务线程池采用有界任务队列，IO 线程通过 `TrySubmit` 非阻塞提交任务。队列满时立即
+返回错误，避免 IO 线程因等待队列空间而失去响应能力。业务 Handler 会被并发调用，
+因此 Handler 访问共享状态时必须自行保证线程安全。
+
+`business_threads` 为 0 时，Handler 仍在 IO 线程执行。这适合极轻量的 Echo 基线；
+对于 CPU 密集、阻塞或耗时业务，应配置业务线程池以隔离 IO 和业务执行。
+
+## 7. TcpConnection 读写流程
+
+可读事件发生后，`HandleRead` 循环 recv，直到返回 `EAGAIN`，把数据追加到输入
+Buffer，再调用消息回调。一次 recv 不保证得到一个完整 RPC 包，协议层会保留不完整
+数据，等待后续可读事件。
+
+发送时，如果输出 Buffer 没有积压，先尝试直接 send，减少一次内存拷贝；未发送完的
+部分加入输出 Buffer，并监听可写事件。fd 再次可写时，`HandleWrite` 继续发送，全部
+发送完成后取消可写事件。
+
+## 8. 生命周期约束
+
+- EventLoop 必须比注册在其中的 Channel 活得更久。
+- Socket 和 Poller 使用 RAII 关闭 fd。
+- TcpConnection 使用 `shared_ptr` 管理异步回调期间的生命周期。
+- 跨线程任务捕获连接的 `weak_ptr`，执行前检查连接是否仍然存在。
+- 关闭连接后，TcpServer 在 main EventLoop 中移除连接，并更新对应 sub Reactor
+  的连接计数。
+
+## 9. 配置示例
+
+```cpp
+minirpc::rpc::RpcServerOptions options;
+options.tcp.io_threads = 4;
+options.tcp.io_load_balance =
+    minirpc::net::IoLoopLoadBalance::LeastConnections;
+options.business_threads = 4;
+options.business_queue_capacity = 65536;
+
+minirpc::rpc::RpcServer server(&loop, address, options);
+```
+
+示例服务端也支持等价的命令行参数：
+
+```bash
+./calculator_server 9000 \
+  --io-threads 4 \
+  --business-threads 4 \
+  --business-queue 65536 \
+  --io-balance least-connections
+```
+
+## 10. 测试
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build -j"$(nproc)"
+ctest --test-dir build --output-on-failure
+```
+
+测试覆盖 EventLoop 跨线程唤醒、IO 线程分配策略、业务线程池队列、跨线程响应发送，
+以及响应乱序时根据 `request_id` 正确匹配。
+
+## 11. 当前限制
+
+- main Reactor 仍由调用方线程运行，未封装为独立线程。
+- IO 负载只依据活动连接数，不依据每条连接的实时流量或 EventLoop CPU 使用率。
+- 业务任务队列满目前映射为通用 `InternalError`，后续可增加专门的过载错误码。
+- 同机压测时，多个客户端 EventLoop 会和服务端线程竞争 CPU；测绝对上限时应使用
+  独立压测机。

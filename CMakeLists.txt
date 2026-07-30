@@ -18,6 +18,7 @@ option(
 include(cmake/Protobuf.cmake)
 
 add_library(minirpc
+    src/common/ThreadPool.cpp
     src/config/RpcConfig.cpp
     src/cluster/Endpoint.cpp
     src/cluster/RoundRobin.cpp
@@ -37,6 +38,8 @@ add_library(minirpc
     src/net/Channel.cpp
     src/net/Poller.cpp
     src/net/EventLoop.cpp
+    src/net/EventLoopThread.cpp
+    src/net/EventLoopThreadPool.cpp
     src/net/TimerQueue.cpp
     src/net/Acceptor.cpp
     src/net/Connector.cpp
@@ -195,6 +198,12 @@ add_executable(test_tcp
 add_executable(test_event_loop
     tests/net/testeventloop.cpp
 )
+add_executable(test_event_loop_thread_pool
+    tests/net/test_event_loop_thread_pool.cpp
+)
+add_executable(test_thread_pool
+    tests/common/test_thread_pool.cpp
+)
 add_executable(test_rpc_codec
     tests/protocol/test_rpc_codec.cpp
 )
@@ -237,6 +246,38 @@ if(MINIRPC_WITH_ZOOKEEPER)
     )
 endif()
 
+set(MINIRPC_TEST_TARGETS
+    test_socket
+    test_buffer
+    test_connector
+    test_tcp
+    test_event_loop
+    test_event_loop_thread_pool
+    test_thread_pool
+    test_rpc_codec
+    test_rpc_server
+    test_rpc_client
+    test_async_logger
+    test_connection_pool
+    test_round_robin
+    test_p2c_ewma
+    test_health_checker
+    test_rpc_metrics
+    test_trace_context
+    test_rpc_config
+    test_http_gateway
+)
+if(MINIRPC_WITH_ZOOKEEPER)
+    list(APPEND MINIRPC_TEST_TARGETS test_zookeeper_registry)
+endif()
+
+# 现有测试使用 assert 做检查，Release 构建也必须保留这些断言。
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    foreach(test_target IN LISTS MINIRPC_TEST_TARGETS)
+        target_compile_options(${test_target} PRIVATE -UNDEBUG)
+    endforeach()
+endif()
+
 target_link_libraries(test_socket PRIVATE
     minirpc
 )
@@ -250,6 +291,12 @@ target_link_libraries(test_tcp PRIVATE
     minirpc
 )
 target_link_libraries(test_event_loop PRIVATE
+    minirpc
+)
+target_link_libraries(test_event_loop_thread_pool PRIVATE
+    minirpc
+)
+target_link_libraries(test_thread_pool PRIVATE
     minirpc
 )
 target_link_libraries(test_rpc_codec PRIVATE
@@ -301,6 +348,11 @@ add_test(NAME test_buffer COMMAND test_buffer)
 add_test(NAME test_connector COMMAND test_connector)
 add_test(NAME test_tcp COMMAND test_tcp)
 add_test(NAME test_event_loop COMMAND test_event_loop)
+add_test(
+    NAME test_event_loop_thread_pool
+    COMMAND test_event_loop_thread_pool
+)
+add_test(NAME test_thread_pool COMMAND test_thread_pool)
 add_test(NAME test_rpc_codec COMMAND test_rpc_codec)
 add_test(NAME test_rpc_server COMMAND test_rpc_server)
 add_test(NAME test_rpc_client COMMAND test_rpc_client)
