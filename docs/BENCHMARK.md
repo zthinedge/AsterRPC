@@ -107,11 +107,35 @@ done
 |---|---:|---:|
 | 单 Reactor | 245k–251k | 0 |
 | 4 个 sub Reactor，无业务池 | 293k–316k | 0 |
-| 4 个 sub Reactor + 4 个业务线程 | 153k–161k | 0 |
+| 4 个 sub Reactor + 4 个业务线程 | 153k–163k | 0 |
 
 Echo Handler 只返回原字符串。业务线程池会额外经历任务入队、线程唤醒和响应投递，
 所以在这种极轻业务下反而降低 QPS。业务线程池的收益需要使用 CPU 密集或阻塞业务
 单独验证。
+
+### 5.1 主从 Reactor + 业务线程池单次结果
+
+服务端使用 4 个 sub Reactor、4 个业务线程和
+`least-connections` 连接分配策略。压测客户端使用 4 个 EventLoop、16 条连接，
+维持 200 个在途请求。一次 50 万请求的正式测量结果如下：
+
+```text
+client io threads: 4
+connections: 16
+timeout(ms): 5000
+requests: 500000
+payload bytes: 1024
+succeeded: 500000
+failed: 0
+elapsed(s): 3.07
+QPS: 162894.36
+latency(us) avg/min/max: 1221/52/45563
+latency(us) P50/P95/P99: 1023/2651/4472
+```
+
+该结果是在 4 vCPU 虚拟机上通过本机回环地址测试得到的，只作为当前实现的 Echo
+基线。客户端、服务端和内核网络协议栈会竞争同一组 CPU，不能将其视为独立压测机
+环境下的性能上限。
 
 ## 6. 如何解释结果
 
