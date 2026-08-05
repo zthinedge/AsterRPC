@@ -1,31 +1,10 @@
 #include "asterrpc/rpc/ServiceDispatcher.h"
+#include "rpc/detail/CallSupport.h"
 
 #include <stdexcept>
 #include <utility>
 
 namespace asterrpc::rpc{
-namespace{
-
-protocol::RpcMessage MakeResponse(
-    const protocol::RpcMessage& request
-){
-    protocol::RpcMessage response;
-    response.message_type=protocol::MessageType::Response;
-    response.codec=request.codec;
-    response.request_id=request.request_id;
-    return response;
-}
-
-void SetError(
-    protocol::RpcMessage* response,
-    protocol::StatusCode status_code,
-    const std::string& error_text
-){
-    response->meta.status_code=status_code;
-    response->meta.error_text=error_text;
-}
-
-}
 
 void ServiceDispatcher::RegisterMethod(
     std::string service_name,
@@ -58,39 +37,37 @@ void ServiceDispatcher::RegisterMethod(
 protocol::RpcMessage ServiceDispatcher::Dispatch(
     const protocol::RpcMessage& request
 )const{
-    protocol::RpcMessage response=MakeResponse(request);
+    protocol::RpcMessage response=detail::MakeResponse(request);
 
     auto service=services_.find(request.meta.service_name);
     if(service==services_.end()){
-        SetError(
-            &response,
+        return detail::MakeErrorResponse(
+            request,
             protocol::StatusCode::ServiceNotFound,
             "rpc service not found"
         );
-        return response;
     }
 
     auto method=service->second.find(request.meta.method_name);
     if(method==service->second.end()){
-        SetError(
-            &response,
+        return detail::MakeErrorResponse(
+            request,
             protocol::StatusCode::MethodNotFound,
             "rpc method not found"
         );
-        return response;
     }
 
     try{
         response.payload=method->second(request.payload);
     }catch(const std::exception& error){
-        SetError(
-            &response,
+        return detail::MakeErrorResponse(
+            request,
             protocol::StatusCode::InvokeError,
             error.what()
         );
     }catch(...){
-        SetError(
-            &response,
+        return detail::MakeErrorResponse(
+            request,
             protocol::StatusCode::InvokeError,
             "rpc method invocation failed"
         );

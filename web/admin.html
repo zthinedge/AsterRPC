@@ -1,9 +1,4 @@
-#include "AdminPage.h"
-
-namespace asterrpc::gateway{
-
-std::string_view AdminPageHtml()noexcept{
-    static constexpr std::string_view html=R"ASTERHTML(<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
@@ -659,8 +654,3 @@ std::string_view AdminPageHtml()noexcept{
   </script>
 </body>
 </html>
-)ASTERHTML";
-    return html;
-}
-
-}

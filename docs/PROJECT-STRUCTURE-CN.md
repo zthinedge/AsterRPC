@@ -18,6 +18,10 @@ include/asterrpc/
 src/
   */               各公共模块的实现
   protocol/detail/ 仅供协议层内部使用的 Header、Meta 编解码细节
+  rpc/detail/      调用层共用的 Deadline 与响应构造逻辑
+
+web/
+  admin.html       管理页面源文件，由 CMake 在构建时嵌入 Gateway
 
 examples/
   client/          Calculator 客户端入口
@@ -48,3 +52,37 @@ benchmarks/
 3. `rpc` 不知道具体 Protobuf 类型，只处理 payload、request_id、注册分发和错误。
 4. Stub 和 Adapter 直接使用 Protobuf 完成业务对象与 payload 的转换，不设置独立的 `serialization` 模块。
 5. 示例业务只能放在 `examples/services`，不能污染框架核心。
+
+## 构建目标与复习边界
+
+项目源码按职责拆成独立的 CMake 目标，使用某个扩展模块时才需要理解
+对应实现：
+
+| CMake 目标 | 负责内容 | 建议复习顺序 |
+|---|---|---:|
+| `AsterRPC::Core` | Reactor、协议编解码、客户端与服务端调用链 | 1 |
+| `AsterRPC::Cluster` | 连接池、配置、健康检查与负载均衡 | 2 |
+| `AsterRPC::Logging` | 异步日志与文件滚动 | 3 |
+| `AsterRPC::ZooKeeper` | 注册、发现、Watch、Session 与配置中心 | 4 |
+| `AsterRPC::Gateway` | HTTP/JSON 网关与管理 API | 5 |
+
+第一次阅读不需要从一万多行源码顺序往下看。先构建核心库：
+
+```bash
+cmake -S . -B build -DASTERRPC_WITH_ZOOKEEPER=OFF
+cmake --build build --target asterrpc -j$(nproc)
+```
+
+核心阅读路径为：
+
+```text
+net/EventLoop
+  -> net/Channel + net/Poller
+  -> net/TcpConnection
+  -> protocol/RpcCodec
+  -> rpc/RpcClient + rpc/PendingCalls
+  -> rpc/RpcServer + rpc/ServiceDispatcher
+```
+
+`Core` 只保留主链路及其直接依赖；服务治理、日志、ZooKeeper 和
+Gateway 不再编译进同一个静态库。

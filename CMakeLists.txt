@@ -19,18 +19,8 @@ include(cmake/Protobuf.cmake)
 
 add_library(asterrpc
     src/common/ThreadPool.cpp
-    src/config/RpcConfig.cpp
-    src/cluster/Endpoint.cpp
-    src/cluster/RoundRobin.cpp
     src/cluster/RetryPolicy.cpp
-    src/cluster/ConnectionPool.cpp
-    src/cluster/ChannelManager.cpp
-    src/health/EndpointState.cpp
-    src/health/HealthChecker.cpp
     src/health/HealthService.cpp
-    src/loadbalance/P2cEwmaLoadBalancer.cpp
-    src/log/AsyncLogger.cpp
-    src/log/RollingFileSink.cpp
     src/metrics/RpcMetrics.cpp
     src/net/InetAddress.cpp
     src/net/Socket.cpp
@@ -50,6 +40,7 @@ add_library(asterrpc
     src/protocol/RpcMetaCodec.cpp
     src/protocol/RpcCodec.cpp
     src/rpc/ServiceDispatcher.cpp
+    src/rpc/detail/CallSupport.cpp
     src/rpc/RpcServer.cpp
     src/rpc/PendingCalls.cpp
     src/rpc/RpcClient.cpp
@@ -57,31 +48,69 @@ add_library(asterrpc
 )
 add_library(AsterRPC::Core ALIAS asterrpc)
 
-target_include_directories(asterrpc PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+target_include_directories(asterrpc
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 target_link_libraries(asterrpc PUBLIC
     Threads::Threads
 )
-target_link_libraries(asterrpc PRIVATE
-    nlohmann_json::nlohmann_json
+add_library(asterrpc_cluster
+    src/config/RpcConfig.cpp
+    src/cluster/Endpoint.cpp
+    src/cluster/RoundRobin.cpp
+    src/cluster/ConnectionPool.cpp
+    src/cluster/ChannelManager.cpp
+    src/health/EndpointState.cpp
+    src/health/HealthChecker.cpp
+    src/loadbalance/P2cEwmaLoadBalancer.cpp
+)
+add_library(AsterRPC::Cluster ALIAS asterrpc_cluster)
+target_include_directories(asterrpc_cluster
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+target_link_libraries(asterrpc_cluster
+    PUBLIC asterrpc
+    PRIVATE nlohmann_json::nlohmann_json
+)
+
+add_library(asterrpc_logging
+    src/log/AsyncLogger.cpp
+    src/log/RollingFileSink.cpp
+)
+add_library(AsterRPC::Logging ALIAS asterrpc_logging)
+target_include_directories(asterrpc_logging
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+target_link_libraries(asterrpc_logging PUBLIC asterrpc)
+
+set(ASTERRPC_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+file(MAKE_DIRECTORY "${ASTERRPC_GENERATED_DIR}")
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/admin.html" ASTERRPC_ADMIN_PAGE_HTML)
+configure_file(
+    src/gateway/AdminPage.cpp.in
+    "${ASTERRPC_GENERATED_DIR}/AdminPage.cpp"
+    @ONLY
 )
 
 add_library(asterrpc_gateway
     src/gateway/AdminApi.cpp
-    src/gateway/AdminPage.cpp
+    "${ASTERRPC_GENERATED_DIR}/AdminPage.cpp"
     src/gateway/HttpGatewayServer.cpp
     src/gateway/HttpMessage.cpp
     src/gateway/ProtobufHttpGateway.cpp
 )
 add_library(AsterRPC::Gateway ALIAS asterrpc_gateway)
-target_include_directories(asterrpc_gateway PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+target_include_directories(asterrpc_gateway
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 target_link_libraries(asterrpc_gateway
     PUBLIC
-        asterrpc
+        asterrpc_cluster
         protobuf::libprotobuf
     PRIVATE
         nlohmann_json::nlohmann_json
@@ -114,7 +143,7 @@ if(ASTERRPC_WITH_ZOOKEEPER)
     )
     target_link_libraries(asterrpc_zookeeper
         PUBLIC
-            asterrpc
+            asterrpc_cluster
         PRIVATE
             ${ZOOKEEPER_MT_LIBRARY}
     )
@@ -124,6 +153,7 @@ if(ASTERRPC_WITH_ZOOKEEPER)
     )
     target_link_libraries(registry_server PRIVATE
         asterrpc_zookeeper
+        asterrpc_logging
     )
 
     add_executable(registry_client
@@ -131,6 +161,7 @@ if(ASTERRPC_WITH_ZOOKEEPER)
     )
     target_link_libraries(registry_client PRIVATE
         asterrpc_zookeeper
+        asterrpc_logging
     )
 endif()
 
@@ -145,6 +176,7 @@ if(ASTERRPC_WITH_ZOOKEEPER)
         calculator_proto
         asterrpc_gateway
         asterrpc_zookeeper
+        asterrpc_logging
     )
 
     add_executable(gateway_calculator_server
@@ -153,6 +185,7 @@ if(ASTERRPC_WITH_ZOOKEEPER)
     target_link_libraries(gateway_calculator_server PRIVATE
         calculator_rpc
         asterrpc_zookeeper
+        asterrpc_logging
     )
 endif()
 
@@ -160,7 +193,7 @@ add_executable(async_logger_demo
     examples/logging/async_logger_demo.cpp
 )
 target_link_libraries(async_logger_demo PRIVATE
-    asterrpc
+    asterrpc_logging
 )
 
 add_executable(calculator_server
@@ -168,6 +201,7 @@ add_executable(calculator_server
 )
 target_link_libraries(calculator_server PRIVATE
     calculator_rpc
+    asterrpc_logging
 )
 
 add_executable(calculator_client
@@ -175,202 +209,86 @@ add_executable(calculator_client
 )
 target_link_libraries(calculator_client PRIVATE
     calculator_rpc
+    asterrpc_logging
 )
 
 add_executable(rpc_bench
     benchmarks/rpc_bench.cpp
 )
 target_link_libraries(rpc_bench PRIVATE
-    asterrpc
+    asterrpc_cluster
 )
 
 enable_testing()
 
-add_executable(test_socket
-    tests/net/testsocket.cpp
-)
-add_executable(test_buffer
-    tests/net/testbuffer.cpp
-)
-add_executable(test_connector
-    tests/net/testconnector.cpp
-)
-add_executable(test_tcp
-    tests/net/testtcp.cpp
-)
-add_executable(test_event_loop
-    tests/net/testeventloop.cpp
-)
-add_executable(test_event_loop_thread_pool
-    tests/net/test_event_loop_thread_pool.cpp
-)
-add_executable(test_thread_pool
-    tests/common/test_thread_pool.cpp
-)
-add_executable(test_rpc_codec
-    tests/protocol/test_rpc_codec.cpp
-)
-add_executable(test_rpc_server
-    tests/rpc/test_rpc_server.cpp
-)
-add_executable(test_rpc_client
-    tests/rpc/test_rpc_client.cpp
-)
-add_executable(test_async_logger
-    tests/log/test_async_logger.cpp
-)
-add_executable(test_connection_pool
-    tests/cluster/test_connection_pool.cpp
-)
-add_executable(test_round_robin
-    tests/cluster/test_round_robin.cpp
-)
-add_executable(test_p2c_ewma
-    tests/loadbalance/test_p2c_ewma.cpp
-)
-add_executable(test_health_checker
-    tests/health/test_health_checker.cpp
-)
-add_executable(test_rpc_metrics
-    tests/metrics/test_rpc_metrics.cpp
-)
-add_executable(test_trace_context
-    tests/trace/test_trace_context.cpp
-)
-add_executable(test_rpc_config
-    tests/config/test_rpc_config.cpp
-)
-add_executable(test_http_gateway
-    tests/gateway/test_http_gateway.cpp
-)
-if(ASTERRPC_WITH_ZOOKEEPER)
-    add_executable(test_zookeeper_registry
-        tests/registry/test_zookeeper_registry.cpp
-    )
-endif()
+function(asterrpc_add_test target source)
+    add_executable(${target} ${source})
+    target_link_libraries(${target} PRIVATE ${ARGN})
 
-set(ASTERRPC_TEST_TARGETS
-    test_socket
-    test_buffer
-    test_connector
-    test_tcp
-    test_event_loop
+    # 现有测试使用 assert，Release 构建也必须保留断言。
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(${target} PRIVATE -UNDEBUG)
+    endif()
+
+    add_test(NAME ${target} COMMAND ${target})
+endfunction()
+
+asterrpc_add_test(test_socket tests/net/testsocket.cpp asterrpc)
+asterrpc_add_test(test_buffer tests/net/testbuffer.cpp asterrpc)
+asterrpc_add_test(test_connector tests/net/testconnector.cpp asterrpc)
+asterrpc_add_test(test_tcp tests/net/testtcp.cpp asterrpc)
+asterrpc_add_test(test_event_loop tests/net/testeventloop.cpp asterrpc)
+asterrpc_add_test(
     test_event_loop_thread_pool
-    test_thread_pool
-    test_rpc_codec
-    test_rpc_server
-    test_rpc_client
+    tests/net/test_event_loop_thread_pool.cpp
+    asterrpc
+)
+asterrpc_add_test(test_thread_pool tests/common/test_thread_pool.cpp asterrpc)
+asterrpc_add_test(test_rpc_codec tests/protocol/test_rpc_codec.cpp asterrpc)
+asterrpc_add_test(test_rpc_server tests/rpc/test_rpc_server.cpp asterrpc)
+asterrpc_add_test(test_rpc_client tests/rpc/test_rpc_client.cpp calculator_rpc)
+asterrpc_add_test(
     test_async_logger
+    tests/log/test_async_logger.cpp
+    asterrpc_logging
+)
+asterrpc_add_test(
     test_connection_pool
+    tests/cluster/test_connection_pool.cpp
+    asterrpc_cluster
+)
+asterrpc_add_test(
     test_round_robin
+    tests/cluster/test_round_robin.cpp
+    asterrpc_cluster
+)
+asterrpc_add_test(
     test_p2c_ewma
+    tests/loadbalance/test_p2c_ewma.cpp
+    asterrpc_cluster
+)
+asterrpc_add_test(
     test_health_checker
-    test_rpc_metrics
-    test_trace_context
+    tests/health/test_health_checker.cpp
+    asterrpc_cluster
+)
+asterrpc_add_test(test_rpc_metrics tests/metrics/test_rpc_metrics.cpp asterrpc)
+asterrpc_add_test(test_trace_context tests/trace/test_trace_context.cpp asterrpc)
+asterrpc_add_test(
     test_rpc_config
+    tests/config/test_rpc_config.cpp
+    asterrpc_cluster
+)
+asterrpc_add_test(
     test_http_gateway
-)
-if(ASTERRPC_WITH_ZOOKEEPER)
-    list(APPEND ASTERRPC_TEST_TARGETS test_zookeeper_registry)
-endif()
-
-# 现有测试使用 assert 做检查，Release 构建也必须保留这些断言。
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    foreach(test_target IN LISTS ASTERRPC_TEST_TARGETS)
-        target_compile_options(${test_target} PRIVATE -UNDEBUG)
-    endforeach()
-endif()
-
-target_link_libraries(test_socket PRIVATE
-    asterrpc
-)
-target_link_libraries(test_buffer PRIVATE
-    asterrpc
-)
-target_link_libraries(test_connector PRIVATE
-    asterrpc
-)
-target_link_libraries(test_tcp PRIVATE
-    asterrpc
-)
-target_link_libraries(test_event_loop PRIVATE
-    asterrpc
-)
-target_link_libraries(test_event_loop_thread_pool PRIVATE
-    asterrpc
-)
-target_link_libraries(test_thread_pool PRIVATE
-    asterrpc
-)
-target_link_libraries(test_rpc_codec PRIVATE
-    asterrpc
-)
-target_link_libraries(test_rpc_server PRIVATE
-    asterrpc
-)
-target_link_libraries(test_rpc_client PRIVATE
-    calculator_rpc
-)
-target_link_libraries(test_async_logger PRIVATE
-    asterrpc
-)
-target_link_libraries(test_connection_pool PRIVATE
-    asterrpc
-)
-target_link_libraries(test_round_robin PRIVATE
-    asterrpc
-)
-target_link_libraries(test_p2c_ewma PRIVATE
-    asterrpc
-)
-target_link_libraries(test_health_checker PRIVATE
-    asterrpc
-)
-target_link_libraries(test_rpc_metrics PRIVATE
-    asterrpc
-)
-target_link_libraries(test_trace_context PRIVATE
-    asterrpc
-)
-target_link_libraries(test_rpc_config PRIVATE
-    asterrpc
-)
-target_link_libraries(test_http_gateway PRIVATE
+    tests/gateway/test_http_gateway.cpp
     calculator_proto
     asterrpc_gateway
 )
 if(ASTERRPC_WITH_ZOOKEEPER)
-    target_link_libraries(test_zookeeper_registry PRIVATE
+    asterrpc_add_test(
+        test_zookeeper_registry
+        tests/registry/test_zookeeper_registry.cpp
         asterrpc_zookeeper
-    )
-endif()
-
-
-add_test(NAME test_socket COMMAND test_socket)
-add_test(NAME test_buffer COMMAND test_buffer)
-add_test(NAME test_connector COMMAND test_connector)
-add_test(NAME test_tcp COMMAND test_tcp)
-add_test(NAME test_event_loop COMMAND test_event_loop)
-add_test(
-    NAME test_event_loop_thread_pool
-    COMMAND test_event_loop_thread_pool
-)
-add_test(NAME test_thread_pool COMMAND test_thread_pool)
-add_test(NAME test_rpc_codec COMMAND test_rpc_codec)
-add_test(NAME test_rpc_server COMMAND test_rpc_server)
-add_test(NAME test_rpc_client COMMAND test_rpc_client)
-add_test(NAME test_async_logger COMMAND test_async_logger)
-add_test(NAME test_connection_pool COMMAND test_connection_pool)
-add_test(NAME test_round_robin COMMAND test_round_robin)
-add_test(NAME test_p2c_ewma COMMAND test_p2c_ewma)
-add_test(NAME test_health_checker COMMAND test_health_checker)
-add_test(NAME test_rpc_metrics COMMAND test_rpc_metrics)
-add_test(NAME test_trace_context COMMAND test_trace_context)
-add_test(NAME test_rpc_config COMMAND test_rpc_config)
-add_test(NAME test_http_gateway COMMAND test_http_gateway)
-if(ASTERRPC_WITH_ZOOKEEPER)
-    add_test(
-        NAME test_zookeeper_registry
-        COMMAND test_zookeeper_registry
     )
 endif()

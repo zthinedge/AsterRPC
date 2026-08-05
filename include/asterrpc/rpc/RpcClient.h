@@ -118,6 +118,8 @@ private:
         std::string bytes
     );
 
+    void HandleConnectionLost();
+
     void HandleMessage(
         net::TcpConnection* connection,
         net::Buffer* buffer

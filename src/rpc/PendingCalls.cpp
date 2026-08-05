@@ -1,34 +1,10 @@
 #include "asterrpc/rpc/PendingCalls.h"
+#include "rpc/detail/CallSupport.h"
 
-#include <chrono>
 #include <stdexcept>
 #include <utility>
 
 namespace asterrpc::rpc{
-namespace{
-
-protocol::RpcMessage MakeErrorResponse(
-    std::uint64_t request_id,
-    protocol::StatusCode status_code,
-    const std::string& error_text
-){
-    protocol::RpcMessage response;
-    response.message_type=protocol::MessageType::Response;
-    response.request_id=request_id;
-    response.meta.status_code=status_code;
-    response.meta.error_text=error_text;
-    return response;
-}
-
-std::uint64_t CurrentTimeMicros(){
-    return static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::system_clock::now().time_since_epoch()
-        ).count()
-    );
-}
-
-}
 
 PendingCalls::ResponseFuture PendingCalls::Add(
     std::uint64_t request_id
@@ -101,17 +77,18 @@ bool PendingCalls::Complete(protocol::RpcMessage response){
             return false;
         }
 
-        expired=pending->second.deadline_us!=0&&
-                CurrentTimeMicros()>=pending->second.deadline_us;
+        expired=detail::DeadlineReached(
+            pending->second.deadline_us
+        );
         call=std::move(pending->second);
         calls_.erase(pending);
     }
 
     if(expired){
-        response=MakeErrorResponse(
-            response.request_id,
+        response=detail::MakeErrorResponse(
             protocol::RpcError::Timeout,
-            "rpc deadline exceeded"
+            "rpc deadline exceeded",
+            response.request_id
         );
     }
 
@@ -136,10 +113,10 @@ bool PendingCalls::Expire(std::uint64_t request_id){
 
     Finish(
         std::move(call),
-        MakeErrorResponse(
-            request_id,
+        detail::MakeErrorResponse(
             protocol::RpcError::Timeout,
-            "rpc deadline exceeded"
+            "rpc deadline exceeded",
+            request_id
         )
     );
     return true;
@@ -151,7 +128,7 @@ bool PendingCalls::Fail(
     const std::string& error_text
 ){
     return Complete(
-        MakeErrorResponse(request_id,status_code,error_text)
+        detail::MakeErrorResponse(status_code,error_text,request_id)
     );
 }
 
@@ -169,7 +146,11 @@ void PendingCalls::FailAll(
     for(auto& item:calls){
         Finish(
             std::move(item.second),
-            MakeErrorResponse(item.first,status_code,error_text)
+            detail::MakeErrorResponse(
+                status_code,
+                error_text,
+                item.first
+            )
         );
     }
 }

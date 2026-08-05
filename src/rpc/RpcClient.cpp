@@ -4,64 +4,13 @@
 #include "asterrpc/net/Buffer.h"
 #include "asterrpc/net/EventLoop.h"
 #include "asterrpc/net/TcpConnection.h"
+#include "rpc/detail/CallSupport.h"
 
 #include <chrono>
-#include <limits>
 #include <stdexcept>
 #include <utility>
 
 namespace asterrpc::rpc{
-namespace{
-
-std::uint64_t CurrentTimeMicros(){
-    return static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::system_clock::now().time_since_epoch()
-        ).count()
-    );
-}
-
-std::uint64_t AddTimeoutToNow(
-    std::uint64_t now,
-    std::chrono::microseconds timeout
-){
-    std::uint64_t duration=static_cast<std::uint64_t>(
-        timeout.count()
-    );
-
-    if(duration>std::numeric_limits<std::uint64_t>::max()-now){
-        return std::numeric_limits<std::uint64_t>::max();
-    }
-
-    return now+duration;
-}
-
-std::uint64_t ResolveDeadline(const CallOptions& options){
-    if(options.timeout.count()<0){
-        throw std::invalid_argument("rpc timeout must not be negative");
-    }
-
-    std::uint64_t deadline=options.deadline_us;
-
-    if(options.timeout.count()>0){
-        std::uint64_t timeout_deadline=AddTimeoutToNow(
-            CurrentTimeMicros(),
-            options.timeout
-        );
-
-        if(deadline==0||timeout_deadline<deadline){
-            deadline=timeout_deadline;
-        }
-    }
-
-    return deadline;
-}
-
-bool DeadlineReached(std::uint64_t deadline_us){
-    return deadline_us!=0&&CurrentTimeMicros()>=deadline_us;
-}
-
-}
 
 RpcClient::RpcClient(
     net::EventLoop* loop,
@@ -90,30 +39,14 @@ RpcClient::RpcClient(
     );
 
     tcp_client_.SetCloseCallback([this](){
-        bool was_connected=connected_.exchange(false);
-        if(was_connected){
-            metrics_.ConnectionClosed();
-        }
-        pending_calls_.FailAll(
-            protocol::StatusCode::ConnectionFailed,
-            "rpc connection closed"
-        );
-
+        HandleConnectionLost();
         if(close_callback_){
             close_callback_();
         }
     });
 
     tcp_client_.SetErrorCallback([this](int error){
-        bool was_connected=connected_.exchange(false);
-        if(was_connected){
-            metrics_.ConnectionClosed();
-        }
-        pending_calls_.FailAll(
-            protocol::StatusCode::ConnectionFailed,
-            "rpc connection failed"
-        );
-
+        HandleConnectionLost();
         if(error_callback_){
             error_callback_(error);
         }
@@ -206,7 +139,7 @@ void RpcClient::StartCall(
     state->service_name=std::move(service_name);
     state->method_name=std::move(method_name);
     state->payload=std::move(payload);
-    state->deadline_us=ResolveDeadline(options);
+    state->deadline_us=detail::ResolveDeadline(options);
     state->max_retries=options.max_retries;
     state->idempotent=options.idempotent;
     const trace::TraceContext* parent=trace::CurrentTraceContext();
@@ -243,7 +176,7 @@ void RpcClient::StartAttempt(
         AddTimeout(request.request_id,state->deadline_us);
     }
 
-    if(DeadlineReached(state->deadline_us)){
+    if(detail::DeadlineReached(state->deadline_us)){
         return;
     }
 
@@ -262,7 +195,7 @@ void RpcClient::HandleAttemptResponse(
         state->idempotent&&
         response.meta.status_code==protocol::RpcError::InternalError&&
         state->attempts<=state->max_retries&&
-        !DeadlineReached(state->deadline_us);
+        !detail::DeadlineReached(state->deadline_us);
 
     if(can_retry){
         metrics_.RetryStarted(
@@ -316,7 +249,7 @@ void RpcClient::AddTimeout(
     std::uint64_t request_id,
     std::uint64_t deadline_us
 ){
-    std::uint64_t now=CurrentTimeMicros();
+    std::uint64_t now=detail::CurrentTimeMicros();
     std::uint64_t remaining=deadline_us>now?deadline_us-now:0;
 
     net::EventLoop::TimerId timer_id=loop_->RunAfter(
@@ -355,6 +288,16 @@ void RpcClient::SendRequest(
 
             tcp_client_.Send(bytes);
         }
+    );
+}
+
+void RpcClient::HandleConnectionLost(){
+    if(connected_.exchange(false)){
+        metrics_.ConnectionClosed();
+    }
+    pending_calls_.FailAll(
+        protocol::StatusCode::ConnectionFailed,
+        "rpc connection lost"
     );
 }
 

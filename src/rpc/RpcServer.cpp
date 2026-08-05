@@ -5,51 +5,13 @@
 #include "asterrpc/net/Buffer.h"
 #include "asterrpc/net/TcpConnection.h"
 #include "asterrpc/trace/TraceContext.h"
+#include "rpc/detail/CallSupport.h"
 
-#include <chrono>
 #include <stdexcept>
 #include <utility>
 
 namespace asterrpc::rpc{
 namespace{
-
-std::uint64_t CurrentTimeMicros(){
-    return static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::system_clock::now().time_since_epoch()
-        ).count()
-    );
-}
-
-bool IsExpired(const protocol::RpcMessage& request){
-    return request.meta.deadline_us!=0&&
-           CurrentTimeMicros()>=request.meta.deadline_us;
-}
-
-protocol::RpcMessage MakeTimeoutResponse(
-    const protocol::RpcMessage& request
-){
-    protocol::RpcMessage response;
-    response.message_type=protocol::MessageType::Response;
-    response.codec=request.codec;
-    response.request_id=request.request_id;
-    response.meta.status_code=protocol::RpcError::Timeout;
-    response.meta.error_text="rpc request deadline exceeded";
-    return response;
-}
-
-protocol::RpcMessage MakeInternalErrorResponse(
-    const protocol::RpcMessage& request,
-    const std::string& error
-){
-    protocol::RpcMessage response;
-    response.message_type=protocol::MessageType::Response;
-    response.codec=request.codec;
-    response.request_id=request.request_id;
-    response.meta.status_code=protocol::RpcError::InternalError;
-    response.meta.error_text=error;
-    return response;
-}
 
 void SetResponseTrace(
     protocol::RpcMessage* response,
@@ -185,8 +147,12 @@ void RpcServer::HandleMessage(
         std::weak_ptr<net::TcpConnection> weak_connection=
             connection->WeakFromThis();
 
-        if(IsExpired(request)){
-            protocol::RpcMessage response=MakeTimeoutResponse(request);
+        if(detail::DeadlineReached(request.meta.deadline_us)){
+            protocol::RpcMessage response=detail::MakeErrorResponse(
+                request,
+                protocol::RpcError::Timeout,
+                "rpc request deadline exceeded"
+            );
             SendResponse(
                 weak_connection,
                 request,
@@ -228,8 +194,9 @@ void RpcServer::HandleMessage(
         );
 
         if(!accepted){
-            protocol::RpcMessage response=MakeInternalErrorResponse(
+            protocol::RpcMessage response=detail::MakeErrorResponse(
                 *queued_request,
+                protocol::RpcError::InternalError,
                 "rpc business queue is full"
             );
             SendResponse(
@@ -251,8 +218,13 @@ void RpcServer::ProcessRequest(
 ){
     trace::TraceScope trace_scope(server_span);
 
-    protocol::RpcMessage response=IsExpired(request)
-        ?MakeTimeoutResponse(request)
+    protocol::RpcMessage response=
+        detail::DeadlineReached(request.meta.deadline_us)
+        ?detail::MakeErrorResponse(
+            request,
+            protocol::RpcError::Timeout,
+            "rpc request deadline exceeded"
+        )
         :dispatcher_.Dispatch(request);
 
     SendResponse(
@@ -277,7 +249,11 @@ void RpcServer::SendResponse(
     try{
         bytes=codec_.Encode(response);
     }catch(const std::exception& error){
-        response=MakeInternalErrorResponse(request,error.what());
+        response=detail::MakeErrorResponse(
+            request,
+            protocol::RpcError::InternalError,
+            error.what()
+        );
         SetResponseTrace(&response,server_span);
         bytes=codec_.Encode(response);
     }

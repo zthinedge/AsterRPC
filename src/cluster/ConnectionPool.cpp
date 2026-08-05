@@ -4,6 +4,7 @@
 #include "asterrpc/net/InetAddress.h"
 #include "asterrpc/rpc/RpcClient.h"
 #include "asterrpc/trace/TraceContext.h"
+#include "rpc/detail/CallSupport.h"
 
 #include <algorithm>
 #include <atomic>
@@ -11,65 +12,12 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
-#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <utility>
 #include <vector>
 
 namespace asterrpc::cluster{
-namespace{
-
-using SystemClock=std::chrono::system_clock;
-
-std::uint64_t CurrentTimeMicros(){
-    return static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::microseconds>(
-            SystemClock::now().time_since_epoch()
-        ).count()
-    );
-}
-
-std::uint64_t ResolveDeadline(const rpc::CallOptions& options){
-    if(options.timeout<std::chrono::microseconds::zero()){
-        throw std::invalid_argument("rpc timeout must not be negative");
-    }
-
-    std::uint64_t deadline=options.deadline_us;
-    if(options.timeout==std::chrono::microseconds::zero()){
-        return deadline;
-    }
-
-    std::uint64_t now=CurrentTimeMicros();
-    std::uint64_t timeout=static_cast<std::uint64_t>(
-        options.timeout.count()
-    );
-    std::uint64_t relative_deadline=
-        timeout>std::numeric_limits<std::uint64_t>::max()-now?
-        std::numeric_limits<std::uint64_t>::max():now+timeout;
-
-    if(deadline==0||relative_deadline<deadline){
-        deadline=relative_deadline;
-    }
-    return deadline;
-}
-
-bool DeadlineReached(std::uint64_t deadline){
-    return deadline!=0&&CurrentTimeMicros()>=deadline;
-}
-
-protocol::RpcMessage MakeErrorResponse(
-    protocol::StatusCode status,
-    std::string message
-){
-    protocol::RpcMessage response;
-    response.message_type=protocol::MessageType::Response;
-    response.meta.status_code=status;
-    response.meta.error_text=std::move(message);
-    return response;
-}
-
-}
 
 bool ConnectionPoolOptions::operator==(
     const ConnectionPoolOptions& other
@@ -155,7 +103,8 @@ public:
         state->method_name=std::move(method_name);
         state->payload=std::move(payload);
         state->call_options=call_options;
-        state->call_options.deadline_us=ResolveDeadline(call_options);
+        state->call_options.deadline_us=
+            rpc::detail::ResolveDeadline(call_options);
         state->call_options.timeout=std::chrono::microseconds::zero();
         state->call_options.max_retries=0;
         state->retry_policy=std::move(retry_policy);
@@ -263,7 +212,7 @@ private:
             return;
         }
 
-        std::uint64_t now=CurrentTimeMicros();
+        std::uint64_t now=rpc::detail::CurrentTimeMicros();
         std::uint64_t remaining=deadline>now?deadline-now:0;
         auto self=shared_from_this();
         state->deadline_timer=loop_->RunAfter(
@@ -271,7 +220,7 @@ private:
             [self,state](){
                 self->Complete(
                     state,
-                    MakeErrorResponse(
+                    rpc::detail::MakeErrorResponse(
                         protocol::StatusCode::Timeout,
                         "rpc deadline exceeded while waiting for connection"
                     )
@@ -287,17 +236,19 @@ private:
         if(stopping_){
             Complete(
                 state,
-                MakeErrorResponse(
+                rpc::detail::MakeErrorResponse(
                     protocol::StatusCode::ConnectionFailed,
                     "connection pool is stopping"
                 )
             );
             return;
         }
-        if(DeadlineReached(state->call_options.deadline_us)){
+        if(rpc::detail::DeadlineReached(
+               state->call_options.deadline_us
+           )){
             Complete(
                 state,
-                MakeErrorResponse(
+                rpc::detail::MakeErrorResponse(
                     protocol::StatusCode::Timeout,
                     "rpc deadline exceeded"
                 )
@@ -507,7 +458,9 @@ private:
         }
 
         if(CanRetry(state,response.meta.status_code)&&
-           !DeadlineReached(state->call_options.deadline_us)){
+           !rpc::detail::DeadlineReached(
+               state->call_options.deadline_us
+           )){
             ScheduleRetry(state);
             return;
         }
@@ -521,14 +474,16 @@ private:
         std::string message
     ){
         if(CanRetry(state,status)&&
-           !DeadlineReached(state->call_options.deadline_us)){
+           !rpc::detail::DeadlineReached(
+               state->call_options.deadline_us
+           )){
             ScheduleRetry(state);
             return;
         }
 
         Complete(
             state,
-            MakeErrorResponse(status,std::move(message))
+            rpc::detail::MakeErrorResponse(status,std::move(message))
         );
     }
 
@@ -538,14 +493,14 @@ private:
         );
 
         if(state->call_options.deadline_us!=0){
-            std::uint64_t now=CurrentTimeMicros();
+            std::uint64_t now=rpc::detail::CurrentTimeMicros();
             std::uint64_t remaining=
                 state->call_options.deadline_us>now?
                 state->call_options.deadline_us-now:0;
             if(static_cast<std::uint64_t>(delay.count())>=remaining){
                 Complete(
                     state,
-                    MakeErrorResponse(
+                    rpc::detail::MakeErrorResponse(
                         protocol::StatusCode::Timeout,
                         "retry backoff would exceed rpc deadline"
                     )
