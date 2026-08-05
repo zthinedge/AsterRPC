@@ -1,6 +1,6 @@
 #pragma once
 
-#include "minirpc/log/LogSink.h"
+#include "asterrpc/log/LogSink.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -8,7 +8,7 @@
 #include <fstream>
 #include <string_view>
 
-namespace minirpc::log{
+namespace asterrpc::log{
 
 class RollingFileSink:public LogSink{
 public:

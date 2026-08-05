@@ -1,18 +1,18 @@
-#include "minirpc/cluster/ChannelManager.h"
-#include "minirpc/cluster/RetryPolicy.h"
-#include "minirpc/cluster/RoundRobin.h"
-#include "minirpc/config/RpcConfig.h"
-#include "minirpc/health/HealthService.h"
-#include "minirpc/loadbalance/P2cEwmaLoadBalancer.h"
-#include "minirpc/log/AsyncLogger.h"
-#include "minirpc/log/LogMacros.h"
-#include "minirpc/net/EventLoop.h"
-#include "minirpc/protocol/RpcMessage.h"
-#include "minirpc/registry/ZooKeeperClient.h"
-#include "minirpc/registry/ZooKeeperConfigCenter.h"
-#include "minirpc/registry/ZooKeeperDiscovery.h"
-#include "minirpc/rpc/CallOptions.h"
-#include "minirpc/trace/TraceContext.h"
+#include "asterrpc/cluster/ChannelManager.h"
+#include "asterrpc/cluster/RetryPolicy.h"
+#include "asterrpc/cluster/RoundRobin.h"
+#include "asterrpc/config/RpcConfig.h"
+#include "asterrpc/health/HealthService.h"
+#include "asterrpc/loadbalance/P2cEwmaLoadBalancer.h"
+#include "asterrpc/log/AsyncLogger.h"
+#include "asterrpc/log/LogMacros.h"
+#include "asterrpc/net/EventLoop.h"
+#include "asterrpc/protocol/RpcMessage.h"
+#include "asterrpc/registry/ZooKeeperClient.h"
+#include "asterrpc/registry/ZooKeeperConfigCenter.h"
+#include "asterrpc/registry/ZooKeeperDiscovery.h"
+#include "asterrpc/rpc/CallOptions.h"
+#include "asterrpc/trace/TraceContext.h"
 
 #include <chrono>
 #include <cstddef>
@@ -25,7 +25,7 @@
 #include <thread>
 #include <utility>
 
-using namespace minirpc;
+using namespace asterrpc;
 
 namespace{
 
@@ -244,7 +244,7 @@ int main(int argc,char* argv[]){
                 trace::TraceContext root_trace=
                     trace::CreateRootTrace();
                 trace::TraceScope trace_scope(root_trace);
-                MINIRPC_LOG_INFO(
+                ASTERRPC_LOG_INFO(
                     logger,
                     "calling "+std::string(kServiceName)+'.'+
                     kMethodName+" endpoint="+endpoint.ToString()
@@ -294,7 +294,7 @@ int main(int argc,char* argv[]){
                     }
                 }
 
-                MINIRPC_LOG_INFO(
+                ASTERRPC_LOG_INFO(
                     logger,
                     "completed "+std::string(kServiceName)+'.'+
                     kMethodName+" endpoint="+endpoint.ToString()+

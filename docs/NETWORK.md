@@ -116,14 +116,14 @@ Buffer，再调用消息回调。一次 recv 不保证得到一个完整 RPC 包
 ## 9. 配置示例
 
 ```cpp
-minirpc::rpc::RpcServerOptions options;
+asterrpc::rpc::RpcServerOptions options;
 options.tcp.io_threads = 4;
 options.tcp.io_load_balance =
-    minirpc::net::IoLoopLoadBalance::LeastConnections;
+    asterrpc::net::IoLoopLoadBalance::LeastConnections;
 options.business_threads = 4;
 options.business_queue_capacity = 65536;
 
-minirpc::rpc::RpcServer server(&loop, address, options);
+asterrpc::rpc::RpcServer server(&loop, address, options);
 ```
 
 示例服务端也支持等价的命令行参数：

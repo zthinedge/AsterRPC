@@ -1,13 +1,13 @@
 #include "GatewayRuntime.h"
 #include "calculator.pb.h"
-#include "minirpc/cluster/ChannelManager.h"
-#include "minirpc/gateway/HttpGatewayServer.h"
-#include "minirpc/log/AsyncLogger.h"
-#include "minirpc/net/EventLoop.h"
-#include "minirpc/net/InetAddress.h"
-#include "minirpc/registry/ZooKeeperClient.h"
-#include "minirpc/registry/ZooKeeperConfigCenter.h"
-#include "minirpc/registry/ZooKeeperDiscovery.h"
+#include "asterrpc/cluster/ChannelManager.h"
+#include "asterrpc/gateway/HttpGatewayServer.h"
+#include "asterrpc/log/AsyncLogger.h"
+#include "asterrpc/net/EventLoop.h"
+#include "asterrpc/net/InetAddress.h"
+#include "asterrpc/registry/ZooKeeperClient.h"
+#include "asterrpc/registry/ZooKeeperConfigCenter.h"
+#include "asterrpc/registry/ZooKeeperDiscovery.h"
 
 #include <chrono>
 #include <csignal>
@@ -19,8 +19,8 @@
 #include <string>
 #include <thread>
 
-using namespace minirpc;
-using namespace minirpc::example::calculator;
+using namespace asterrpc;
+using namespace asterrpc::example::calculator;
 
 namespace{
 

@@ -1,4 +1,4 @@
-#include "minirpc/cluster/RetryPolicy.h"
+#include "asterrpc/cluster/RetryPolicy.h"
 
 #include <algorithm>
 #include <atomic>
@@ -8,7 +8,7 @@
 #include <limits>
 #include <stdexcept>
 
-namespace minirpc::cluster{
+namespace asterrpc::cluster{
 namespace{
 
 double RandomUnit()noexcept{

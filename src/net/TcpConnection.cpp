@@ -1,12 +1,12 @@
-#include "minirpc/net/TcpConnection.h"
+#include "asterrpc/net/TcpConnection.h"
 
-#include "minirpc/net/EventLoop.h"
+#include "asterrpc/net/EventLoop.h"
 
 #include <cerrno>
 #include <sys/socket.h>
 #include <utility>
 
-namespace minirpc::net{
+namespace asterrpc::net{
 
 TcpConnection::TcpConnection(EventLoop*loop,Socket socket)
     :loop_(loop),

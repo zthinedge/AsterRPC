@@ -1,9 +1,9 @@
-#include "minirpc/common/ThreadPool.h"
+#include "asterrpc/common/ThreadPool.h"
 
 #include <stdexcept>
 #include <utility>
 
-namespace minirpc::common{
+namespace asterrpc::common{
 
 ThreadPool::ThreadPool(
     std::size_t thread_count,

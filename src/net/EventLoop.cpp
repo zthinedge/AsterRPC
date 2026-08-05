@@ -1,5 +1,5 @@
-#include "minirpc/net/EventLoop.h"
-#include "minirpc/net/TimerQueue.h"
+#include "asterrpc/net/EventLoop.h"
+#include "asterrpc/net/TimerQueue.h"
 
 #include <cerrno>
 #include <cstdint>
@@ -10,7 +10,7 @@
 #include <utility>
 #include <memory>
 
-namespace minirpc::net{
+namespace asterrpc::net{
 
 namespace{
 

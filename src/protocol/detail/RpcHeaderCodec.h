@@ -1,10 +1,10 @@
 #pragma once
 
-#include "minirpc/protocol/RpcHeader.h"
+#include "asterrpc/protocol/RpcHeader.h"
 
 #include <string>
 
-namespace minirpc::protocol::detail{
+namespace asterrpc::protocol::detail{
 
 class RpcHeaderCodec{
 public:

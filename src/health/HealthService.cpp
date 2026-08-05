@@ -1,10 +1,10 @@
-#include "minirpc/health/HealthService.h"
+#include "asterrpc/health/HealthService.h"
 
-#include "minirpc/rpc/RpcServer.h"
+#include "asterrpc/rpc/RpcServer.h"
 
 #include <stdexcept>
 
-namespace minirpc::health{
+namespace asterrpc::health{
 
 void HealthService::RegisterTo(rpc::RpcServer* server){
     if(server==nullptr){

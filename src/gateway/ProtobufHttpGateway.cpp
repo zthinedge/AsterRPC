@@ -1,8 +1,8 @@
-#include "minirpc/gateway/ProtobufHttpGateway.h"
+#include "asterrpc/gateway/ProtobufHttpGateway.h"
 
-#include "minirpc/gateway/RpcChannel.h"
-#include "minirpc/protocol/RpcMeta.h"
-#include "minirpc/trace/TraceContext.h"
+#include "asterrpc/gateway/RpcChannel.h"
+#include "asterrpc/protocol/RpcMeta.h"
+#include "asterrpc/trace/TraceContext.h"
 
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/descriptor.pb.h>
@@ -19,7 +19,7 @@
 #include <string_view>
 #include <utility>
 
-namespace minirpc::gateway{
+namespace asterrpc::gateway{
 namespace{
 
 struct Route{

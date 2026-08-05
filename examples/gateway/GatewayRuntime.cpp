@@ -1,18 +1,18 @@
 #include "GatewayRuntime.h"
 
-#include "minirpc/cluster/ChannelManager.h"
-#include "minirpc/cluster/RetryPolicy.h"
-#include "minirpc/cluster/RoundRobin.h"
-#include "minirpc/config/RpcConfig.h"
-#include "minirpc/health/HealthService.h"
-#include "minirpc/loadbalance/P2cEwmaLoadBalancer.h"
-#include "minirpc/log/AsyncLogger.h"
-#include "minirpc/log/LogMacros.h"
-#include "minirpc/net/EventLoop.h"
-#include "minirpc/registry/ZooKeeperClient.h"
-#include "minirpc/registry/ZooKeeperConfigCenter.h"
-#include "minirpc/registry/ZooKeeperDiscovery.h"
-#include "minirpc/trace/TraceContext.h"
+#include "asterrpc/cluster/ChannelManager.h"
+#include "asterrpc/cluster/RetryPolicy.h"
+#include "asterrpc/cluster/RoundRobin.h"
+#include "asterrpc/config/RpcConfig.h"
+#include "asterrpc/health/HealthService.h"
+#include "asterrpc/loadbalance/P2cEwmaLoadBalancer.h"
+#include "asterrpc/log/AsyncLogger.h"
+#include "asterrpc/log/LogMacros.h"
+#include "asterrpc/net/EventLoop.h"
+#include "asterrpc/registry/ZooKeeperClient.h"
+#include "asterrpc/registry/ZooKeeperConfigCenter.h"
+#include "asterrpc/registry/ZooKeeperDiscovery.h"
+#include "asterrpc/trace/TraceContext.h"
 
 #include <google/protobuf/descriptor.h>
 
@@ -24,7 +24,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace minirpc::example::gateway{
+namespace asterrpc::example::gateway{
 namespace{
 
 protocol::RpcMessage ErrorResponse(
@@ -116,7 +116,7 @@ public:
             );
         }
 
-        minirpc::gateway::AdminServiceInfo info;
+        asterrpc::gateway::AdminServiceInfo info;
         info.name=std::string(
             service->full_name().data(),
             service->full_name().size()
@@ -218,7 +218,7 @@ public:
         std::string method_name,
         std::string payload,
         rpc::CallOptions options,
-        minirpc::gateway::RpcChannel::Completion completion
+        asterrpc::gateway::RpcChannel::Completion completion
     ){
         registry::DiscoveryResult discovered=
             discovery_->Resolve(service_name);
@@ -245,7 +245,7 @@ public:
 
         const trace::TraceContext* context=
             trace::CurrentTraceContext();
-        minirpc::gateway::AdminTraceInfo trace_info;
+        asterrpc::gateway::AdminTraceInfo trace_info;
         trace_info.trace_id=
             context==nullptr?std::string{}:context->trace_id;
         trace_info.service=service_name;
@@ -270,7 +270,7 @@ public:
         }
         trace_info.endpoint=endpoint->ToString();
 
-        MINIRPC_LOG_INFO(
+        ASTERRPC_LOG_INFO(
             *logger_,
             "HTTP gateway calling "+service_name+'.'+method_name+
             " endpoint="+endpoint->ToString()
@@ -349,21 +349,21 @@ public:
         }
     }
 
-    std::vector<minirpc::gateway::AdminServiceInfo>
+    std::vector<asterrpc::gateway::AdminServiceInfo>
     Services()const{
         return services_;
     }
 
-    std::vector<minirpc::gateway::AdminInstanceInfo>
+    std::vector<asterrpc::gateway::AdminInstanceInfo>
     Instances()const{
-        std::vector<minirpc::gateway::AdminInstanceInfo> result;
+        std::vector<asterrpc::gateway::AdminInstanceInfo> result;
         for(const auto& service:services_){
             auto discovered=discovery_->Resolve(service.name);
             load_balancer_.GetHealthChecker().Update(
                 discovered.providers
             );
             for(const auto& endpoint:*discovered.providers){
-                minirpc::gateway::AdminInstanceInfo instance;
+                asterrpc::gateway::AdminInstanceInfo instance;
                 instance.service=service.name;
                 instance.endpoint=endpoint.ToString();
                 instance.discovery_status=
@@ -383,13 +383,13 @@ public:
         return result;
     }
 
-    std::vector<minirpc::gateway::AdminEndpointMetrics>
+    std::vector<asterrpc::gateway::AdminEndpointMetrics>
     Metrics()const{
         std::vector<
-            minirpc::gateway::AdminEndpointMetrics
+            asterrpc::gateway::AdminEndpointMetrics
         > result;
         for(const auto& pool:channels_->Snapshot()){
-            minirpc::gateway::AdminEndpointMetrics metrics;
+            asterrpc::gateway::AdminEndpointMetrics metrics;
             metrics.endpoint=pool->GetEndpoint().ToString();
             metrics.totals=pool->GetMetrics();
             metrics.methods=pool->GetAllMethodMetrics();
@@ -398,9 +398,9 @@ public:
         return result;
     }
 
-    std::vector<minirpc::gateway::AdminServiceConfig>
+    std::vector<asterrpc::gateway::AdminServiceConfig>
     Config()const{
-        std::vector<minirpc::gateway::AdminServiceConfig> result;
+        std::vector<asterrpc::gateway::AdminServiceConfig> result;
         for(const auto& service:services_){
             result.push_back({
                 service.name,
@@ -410,14 +410,14 @@ public:
         return result;
     }
 
-    std::vector<minirpc::gateway::AdminTraceInfo>
+    std::vector<asterrpc::gateway::AdminTraceInfo>
     Traces()const{
         std::lock_guard<std::mutex> lock(traces_mutex_);
         return {traces_.begin(),traces_.end()};
     }
 
-    minirpc::gateway::AdminHealthInfo Health()const{
-        minirpc::gateway::AdminHealthInfo health;
+    asterrpc::gateway::AdminHealthInfo Health()const{
+        asterrpc::gateway::AdminHealthInfo health;
         health.zookeeper_connected=zk_client_->IsConnected();
         health.services=services_.size();
         bool discovery_ready=true;
@@ -463,7 +463,7 @@ private:
             UpdateActiveOptions(active_options);
     }
 
-    void RecordTrace(minirpc::gateway::AdminTraceInfo trace){
+    void RecordTrace(asterrpc::gateway::AdminTraceInfo trace){
         constexpr std::size_t max_traces=256;
         std::lock_guard<std::mutex> lock(traces_mutex_);
         traces_.push_front(std::move(trace));
@@ -479,9 +479,9 @@ private:
     log::AsyncLogger* logger_;
     mutable loadbalance::P2cEwmaLoadBalancer load_balancer_;
     cluster::RoundRobin round_robin_;
-    std::vector<minirpc::gateway::AdminServiceInfo> services_;
+    std::vector<asterrpc::gateway::AdminServiceInfo> services_;
     mutable std::mutex traces_mutex_;
-    std::deque<minirpc::gateway::AdminTraceInfo> traces_;
+    std::deque<asterrpc::gateway::AdminTraceInfo> traces_;
     registry::ZooKeeperConfigCenter::ListenerId config_listener_=0;
     bool started_=false;
 };
@@ -528,32 +528,32 @@ void GatewayRuntime::AsyncCall(
     );
 }
 
-std::vector<minirpc::gateway::AdminServiceInfo>
+std::vector<asterrpc::gateway::AdminServiceInfo>
 GatewayRuntime::Services()const{
     return impl_->Services();
 }
 
-std::vector<minirpc::gateway::AdminInstanceInfo>
+std::vector<asterrpc::gateway::AdminInstanceInfo>
 GatewayRuntime::Instances()const{
     return impl_->Instances();
 }
 
-std::vector<minirpc::gateway::AdminEndpointMetrics>
+std::vector<asterrpc::gateway::AdminEndpointMetrics>
 GatewayRuntime::Metrics()const{
     return impl_->Metrics();
 }
 
-std::vector<minirpc::gateway::AdminServiceConfig>
+std::vector<asterrpc::gateway::AdminServiceConfig>
 GatewayRuntime::Config()const{
     return impl_->Config();
 }
 
-std::vector<minirpc::gateway::AdminTraceInfo>
+std::vector<asterrpc::gateway::AdminTraceInfo>
 GatewayRuntime::Traces()const{
     return impl_->Traces();
 }
 
-minirpc::gateway::AdminHealthInfo
+asterrpc::gateway::AdminHealthInfo
 GatewayRuntime::Health()const{
     return impl_->Health();
 }

@@ -1,4 +1,4 @@
-#include "minirpc/metrics/RpcMetrics.h"
+#include "asterrpc/metrics/RpcMetrics.h"
 
 #include <cassert>
 #include <chrono>
@@ -9,8 +9,8 @@
 
 namespace{
 
-using minirpc::metrics::RpcMetrics;
-using minirpc::protocol::StatusCode;
+using asterrpc::metrics::RpcMetrics;
+using asterrpc::protocol::StatusCode;
 
 void TestCounters(){
     RpcMetrics metrics;

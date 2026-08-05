@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(mini_rpc LANGUAGES CXX)
+project(AsterRPC LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,14 +10,14 @@ find_package(Threads REQUIRED)
 find_package(nlohmann_json 3.10 REQUIRED)
 
 option(
-    MINIRPC_WITH_ZOOKEEPER
+    ASTERRPC_WITH_ZOOKEEPER
     "Build the ZooKeeper service registry adapter"
     OFF
 )
 
 include(cmake/Protobuf.cmake)
 
-add_library(minirpc
+add_library(asterrpc
     src/common/ThreadPool.cpp
     src/config/RpcConfig.cpp
     src/cluster/Endpoint.cpp
@@ -55,37 +55,39 @@ add_library(minirpc
     src/rpc/RpcClient.cpp
     src/trace/TraceContext.cpp
 )
+add_library(AsterRPC::Core ALIAS asterrpc)
 
-target_include_directories(minirpc PUBLIC
+target_include_directories(asterrpc PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(minirpc PUBLIC
+target_link_libraries(asterrpc PUBLIC
     Threads::Threads
 )
-target_link_libraries(minirpc PRIVATE
+target_link_libraries(asterrpc PRIVATE
     nlohmann_json::nlohmann_json
 )
 
-add_library(minirpc_gateway
+add_library(asterrpc_gateway
     src/gateway/AdminApi.cpp
     src/gateway/AdminPage.cpp
     src/gateway/HttpGatewayServer.cpp
     src/gateway/HttpMessage.cpp
     src/gateway/ProtobufHttpGateway.cpp
 )
-target_include_directories(minirpc_gateway PUBLIC
+add_library(AsterRPC::Gateway ALIAS asterrpc_gateway)
+target_include_directories(asterrpc_gateway PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
-target_link_libraries(minirpc_gateway
+target_link_libraries(asterrpc_gateway
     PUBLIC
-        minirpc
+        asterrpc
         protobuf::libprotobuf
     PRIVATE
         nlohmann_json::nlohmann_json
 )
 
-if(MINIRPC_WITH_ZOOKEEPER)
+if(ASTERRPC_WITH_ZOOKEEPER)
     find_path(
         ZOOKEEPER_INCLUDE_DIR
         NAMES zookeeper/zookeeper.h
@@ -97,21 +99,22 @@ if(MINIRPC_WITH_ZOOKEEPER)
         REQUIRED
     )
 
-    add_library(minirpc_zookeeper
+    add_library(asterrpc_zookeeper
         src/registry/ZooKeeperClient.cpp
         src/registry/ZooKeeperConfigCenter.cpp
         src/registry/ZooKeeperDiscovery.cpp
         src/registry/ZooKeeperProvider.cpp
     )
-    target_include_directories(minirpc_zookeeper
+    add_library(AsterRPC::ZooKeeper ALIAS asterrpc_zookeeper)
+    target_include_directories(asterrpc_zookeeper
         PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/include
         PRIVATE
             ${ZOOKEEPER_INCLUDE_DIR}
     )
-    target_link_libraries(minirpc_zookeeper
+    target_link_libraries(asterrpc_zookeeper
         PUBLIC
-            minirpc
+            asterrpc
         PRIVATE
             ${ZOOKEEPER_MT_LIBRARY}
     )
@@ -120,28 +123,28 @@ if(MINIRPC_WITH_ZOOKEEPER)
         examples/registry/registry_server.cpp
     )
     target_link_libraries(registry_server PRIVATE
-        minirpc_zookeeper
+        asterrpc_zookeeper
     )
 
     add_executable(registry_client
         examples/registry/registry_client.cpp
     )
     target_link_libraries(registry_client PRIVATE
-        minirpc_zookeeper
+        asterrpc_zookeeper
     )
 endif()
 
 add_subdirectory(examples/services/calculator)
 
-if(MINIRPC_WITH_ZOOKEEPER)
+if(ASTERRPC_WITH_ZOOKEEPER)
     add_executable(http_gateway
         examples/gateway/GatewayRuntime.cpp
         examples/gateway/http_gateway.cpp
     )
     target_link_libraries(http_gateway PRIVATE
         calculator_proto
-        minirpc_gateway
-        minirpc_zookeeper
+        asterrpc_gateway
+        asterrpc_zookeeper
     )
 
     add_executable(gateway_calculator_server
@@ -149,7 +152,7 @@ if(MINIRPC_WITH_ZOOKEEPER)
     )
     target_link_libraries(gateway_calculator_server PRIVATE
         calculator_rpc
-        minirpc_zookeeper
+        asterrpc_zookeeper
     )
 endif()
 
@@ -157,7 +160,7 @@ add_executable(async_logger_demo
     examples/logging/async_logger_demo.cpp
 )
 target_link_libraries(async_logger_demo PRIVATE
-    minirpc
+    asterrpc
 )
 
 add_executable(calculator_server
@@ -178,7 +181,7 @@ add_executable(rpc_bench
     benchmarks/rpc_bench.cpp
 )
 target_link_libraries(rpc_bench PRIVATE
-    minirpc
+    asterrpc
 )
 
 enable_testing()
@@ -240,13 +243,13 @@ add_executable(test_rpc_config
 add_executable(test_http_gateway
     tests/gateway/test_http_gateway.cpp
 )
-if(MINIRPC_WITH_ZOOKEEPER)
+if(ASTERRPC_WITH_ZOOKEEPER)
     add_executable(test_zookeeper_registry
         tests/registry/test_zookeeper_registry.cpp
     )
 endif()
 
-set(MINIRPC_TEST_TARGETS
+set(ASTERRPC_TEST_TARGETS
     test_socket
     test_buffer
     test_connector
@@ -267,78 +270,78 @@ set(MINIRPC_TEST_TARGETS
     test_rpc_config
     test_http_gateway
 )
-if(MINIRPC_WITH_ZOOKEEPER)
-    list(APPEND MINIRPC_TEST_TARGETS test_zookeeper_registry)
+if(ASTERRPC_WITH_ZOOKEEPER)
+    list(APPEND ASTERRPC_TEST_TARGETS test_zookeeper_registry)
 endif()
 
 # 现有测试使用 assert 做检查，Release 构建也必须保留这些断言。
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    foreach(test_target IN LISTS MINIRPC_TEST_TARGETS)
+    foreach(test_target IN LISTS ASTERRPC_TEST_TARGETS)
         target_compile_options(${test_target} PRIVATE -UNDEBUG)
     endforeach()
 endif()
 
 target_link_libraries(test_socket PRIVATE
-    minirpc
+    asterrpc
 )
 target_link_libraries(test_buffer PRIVATE
-    minirpc
+    asterrpc
 )
 target_link_libraries(test_connector PRIVATE
-    minirpc
+    asterrpc
 )
 target_link_libraries(test_tcp PRIVATE
-    minirpc
+    asterrpc
 )
 target_link_libraries(test_event_loop PRIVATE
-    minirpc
+    asterrpc
 )
 target_link_libraries(test_event_loop_thread_pool PRIVATE
-    minirpc
+    asterrpc
 )
 target_link_libraries(test_thread_pool PRIVATE
-    minirpc
+    asterrpc
 )
 target_link_libraries(test_rpc_codec PRIVATE
-    minirpc
+    asterrpc
 )
 target_link_libraries(test_rpc_server PRIVATE
-    minirpc
+    asterrpc
 )
 target_link_libraries(test_rpc_client PRIVATE
     calculator_rpc
 )
 target_link_libraries(test_async_logger PRIVATE
-    minirpc
+    asterrpc
 )
 target_link_libraries(test_connection_pool PRIVATE
-    minirpc
+    asterrpc
 )
 target_link_libraries(test_round_robin PRIVATE
-    minirpc
+    asterrpc
 )
 target_link_libraries(test_p2c_ewma PRIVATE
-    minirpc
+    asterrpc
 )
 target_link_libraries(test_health_checker PRIVATE
-    minirpc
+    asterrpc
 )
 target_link_libraries(test_rpc_metrics PRIVATE
-    minirpc
+    asterrpc
 )
 target_link_libraries(test_trace_context PRIVATE
-    minirpc
+    asterrpc
 )
 target_link_libraries(test_rpc_config PRIVATE
-    minirpc
+    asterrpc
 )
 target_link_libraries(test_http_gateway PRIVATE
     calculator_proto
-    minirpc_gateway
+    asterrpc_gateway
 )
-if(MINIRPC_WITH_ZOOKEEPER)
+if(ASTERRPC_WITH_ZOOKEEPER)
     target_link_libraries(test_zookeeper_registry PRIVATE
-        minirpc_zookeeper
+        asterrpc_zookeeper
     )
 endif()
 
@@ -365,7 +368,7 @@ add_test(NAME test_rpc_metrics COMMAND test_rpc_metrics)
 add_test(NAME test_trace_context COMMAND test_trace_context)
 add_test(NAME test_rpc_config COMMAND test_rpc_config)
 add_test(NAME test_http_gateway COMMAND test_http_gateway)
-if(MINIRPC_WITH_ZOOKEEPER)
+if(ASTERRPC_WITH_ZOOKEEPER)
     add_test(
         NAME test_zookeeper_registry
         COMMAND test_zookeeper_registry

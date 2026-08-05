@@ -1,5 +1,5 @@
-#include "minirpc/cluster/Endpoint.h"
-#include "minirpc/cluster/RoundRobin.h"
+#include "asterrpc/cluster/Endpoint.h"
+#include "asterrpc/cluster/RoundRobin.h"
 
 #include <array>
 #include <atomic>
@@ -9,7 +9,7 @@
 #include <thread>
 #include <vector>
 
-using namespace minirpc;
+using namespace asterrpc;
 
 namespace{
 

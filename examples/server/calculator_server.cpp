@@ -1,10 +1,10 @@
 #include "CalculatorService.h"
-#include "minirpc/log/AsyncLogger.h"
-#include "minirpc/log/LogMacros.h"
-#include "minirpc/metrics/RpcMetrics.h"
-#include "minirpc/net/EventLoop.h"
-#include "minirpc/net/InetAddress.h"
-#include "minirpc/rpc/RpcServer.h"
+#include "asterrpc/log/AsyncLogger.h"
+#include "asterrpc/log/LogMacros.h"
+#include "asterrpc/metrics/RpcMetrics.h"
+#include "asterrpc/net/EventLoop.h"
+#include "asterrpc/net/InetAddress.h"
+#include "asterrpc/rpc/RpcServer.h"
 
 #include <cstdint>
 #include <cstddef>
@@ -14,8 +14,8 @@
 #include <string>
 #include <thread>
 
-using namespace minirpc;
-using namespace minirpc::example::calculator;
+using namespace asterrpc;
+using namespace asterrpc::example::calculator;
 
 namespace{
 
@@ -31,7 +31,7 @@ public:
         int result=request.a()+request.b();
         response->set_result(result);
 
-        MINIRPC_LOG_INFO(
+        ASTERRPC_LOG_INFO(
             *logger_,
             "CalculatorService.Add: "+
             std::to_string(request.a())+'+'+
@@ -187,7 +187,7 @@ int main(int argc,char* argv[]){
         );
         server.Start();
 
-        MINIRPC_LOG_INFO(
+        ASTERRPC_LOG_INFO(
             logger,
             "calculator rpc server listening on port "+
             std::to_string(arguments.port)
@@ -218,7 +218,7 @@ int main(int argc,char* argv[]){
 
         PrintMetrics(server.GetMetrics());
 
-        MINIRPC_LOG_INFO(logger,"calculator rpc server stopped");
+        ASTERRPC_LOG_INFO(logger,"calculator rpc server stopped");
         logger.Stop();
         return 0;
     }catch(const std::exception& error){

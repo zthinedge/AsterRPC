@@ -1,10 +1,10 @@
-#include "minirpc/metrics/RpcMetrics.h"
+#include "asterrpc/metrics/RpcMetrics.h"
 
 #include <algorithm>
 #include <limits>
 #include <utility>
 
-namespace minirpc::metrics{
+namespace asterrpc::metrics{
 namespace{
 
 constexpr std::array<std::uint64_t,19> kLatencyUpperBoundsUs{

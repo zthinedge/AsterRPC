@@ -57,5 +57,5 @@ target_include_directories(calculator_rpc PUBLIC
 
 target_link_libraries(calculator_rpc PUBLIC
     calculator_proto
-    minirpc
+    asterrpc
 )

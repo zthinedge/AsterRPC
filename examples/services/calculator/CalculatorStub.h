@@ -1,13 +1,13 @@
 #pragma once
 
 #include "calculator.pb.h"
-#include "minirpc/rpc/CallOptions.h"
+#include "asterrpc/rpc/CallOptions.h"
 
-namespace minirpc::rpc{
+namespace asterrpc::rpc{
 class RpcClient;
 }
 
-namespace minirpc::example::calculator{
+namespace asterrpc::example::calculator{
 
 class CalculatorStub{
 public:

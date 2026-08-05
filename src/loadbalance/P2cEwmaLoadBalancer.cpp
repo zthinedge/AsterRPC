@@ -1,10 +1,10 @@
-#include "minirpc/loadbalance/P2cEwmaLoadBalancer.h"
+#include "asterrpc/loadbalance/P2cEwmaLoadBalancer.h"
 
 #include <algorithm>
 #include <cstddef>
 #include <utility>
 
-namespace minirpc::loadbalance{
+namespace asterrpc::loadbalance{
 
 P2cEwmaLoadBalancer::Selection::Selection(
     std::shared_ptr<health::EndpointState> state,

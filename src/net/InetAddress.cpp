@@ -1,7 +1,7 @@
-#include "minirpc/net/InetAddress.h"
+#include "asterrpc/net/InetAddress.h"
 #include <stdexcept>
 
-namespace minirpc::net {
+namespace asterrpc::net {
 
 InetAddress::InetAddress(const std::string& ip, std::uint16_t port) {
     addr_.sin_family = AF_INET;

@@ -1,4 +1,4 @@
-#include "minirpc/trace/TraceContext.h"
+#include "asterrpc/trace/TraceContext.h"
 
 #include <cassert>
 #include <cctype>
@@ -7,12 +7,12 @@
 
 namespace{
 
-using minirpc::trace::CreateChildSpan;
-using minirpc::trace::CreateRootTrace;
-using minirpc::trace::CreateServerSpan;
-using minirpc::trace::CurrentTraceContext;
-using minirpc::trace::TraceContext;
-using minirpc::trace::TraceScope;
+using asterrpc::trace::CreateChildSpan;
+using asterrpc::trace::CreateRootTrace;
+using asterrpc::trace::CreateServerSpan;
+using asterrpc::trace::CurrentTraceContext;
+using asterrpc::trace::TraceContext;
+using asterrpc::trace::TraceScope;
 
 bool IsLowerHex(const std::string& value){
     for(unsigned char character:value){

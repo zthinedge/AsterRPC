@@ -1,10 +1,10 @@
-#include "minirpc/net/EventLoop.h"
-#include "minirpc/net/EventLoopThreadPool.h"
+#include "asterrpc/net/EventLoop.h"
+#include "asterrpc/net/EventLoopThreadPool.h"
 
 #include <cassert>
 #include <vector>
 
-using namespace minirpc::net;
+using namespace asterrpc::net;
 
 namespace{
 

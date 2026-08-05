@@ -1,11 +1,11 @@
 #pragma once
 
-#include "minirpc/protocol/RpcMeta.h"
+#include "asterrpc/protocol/RpcMeta.h"
 
 #include <cstddef>
 #include <string>
 
-namespace minirpc::protocol::detail{
+namespace asterrpc::protocol::detail{
 
 class RpcMetaCodec{
 public:

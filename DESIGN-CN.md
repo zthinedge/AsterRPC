@@ -320,7 +320,7 @@ TCP 是字节流，不是消息队列。一次 `send` 不等于一次 `recv`：
 固定头建议：
 
 ```text
-uint32 magic        // 固定值，例如 0x4d525043，表示 "MRPC"
+uint32 magic        // 固定值 0x41525043，表示 "ARPC"
 uint8  version      // 当前协议版本为 3
 uint8  message_type // REQUEST 或 RESPONSE
 uint8  codec        // 当前为 PROTOBUF

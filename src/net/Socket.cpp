@@ -1,5 +1,5 @@
-#include "minirpc/net/Socket.h"
-#include "minirpc/net/InetAddress.h"
+#include "asterrpc/net/Socket.h"
+#include "asterrpc/net/InetAddress.h"
 
 #include <unistd.h>        // close
 #include <sys/socket.h>    // socket, bind, listen, accept, connect
@@ -8,7 +8,7 @@
 #include <stdexcept>       // runtime_error
 #include <cerrno>          // errno
 
-namespace minirpc::net {
+namespace asterrpc::net {
 
 // 构造：创建 TCP 套接字
 Socket::Socket() : fd_(::socket(AF_INET, SOCK_STREAM, 0)) {
@@ -123,4 +123,4 @@ void Socket::SetNonBlocking(){
 }
 
 
-} // namespace net::minirpc
+} // namespace net::asterrpc

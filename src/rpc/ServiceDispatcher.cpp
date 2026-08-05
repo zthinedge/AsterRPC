@@ -1,9 +1,9 @@
-#include "minirpc/rpc/ServiceDispatcher.h"
+#include "asterrpc/rpc/ServiceDispatcher.h"
 
 #include <stdexcept>
 #include <utility>
 
-namespace minirpc::rpc{
+namespace asterrpc::rpc{
 namespace{
 
 protocol::RpcMessage MakeResponse(

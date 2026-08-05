@@ -1,6 +1,6 @@
-#include "minirpc/registry/ZooKeeperConfigCenter.h"
+#include "asterrpc/registry/ZooKeeperConfigCenter.h"
 
-#include "minirpc/registry/ZooKeeperClient.h"
+#include "asterrpc/registry/ZooKeeperClient.h"
 
 #include <atomic>
 #include <map>
@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-namespace minirpc::registry{
+namespace asterrpc::registry{
 namespace{
 
 std::string NormalizeRoot(std::string root_path){

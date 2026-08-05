@@ -1,4 +1,4 @@
-#include "minirpc/config/RpcConfig.h"
+#include "asterrpc/config/RpcConfig.h"
 
 #include <cassert>
 #include <chrono>
@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-using namespace minirpc;
+using namespace asterrpc;
 
 namespace{
 

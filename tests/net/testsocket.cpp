@@ -1,5 +1,5 @@
-#include "minirpc/net/Socket.h"
-#include "minirpc/net/InetAddress.h"
+#include "asterrpc/net/Socket.h"
+#include "asterrpc/net/InetAddress.h"
 
 #include <arpa/inet.h>
 #include <cstdint>
@@ -12,8 +12,8 @@
 #include <sys/socket.h>
 #include <thread>
 
-using minirpc::net::InetAddress;
-using minirpc::net::Socket;
+using asterrpc::net::InetAddress;
+using asterrpc::net::Socket;
 
 int main() {
     std::promise<std::uint16_t> port_promise;

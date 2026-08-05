@@ -41,7 +41,7 @@ TCP 只提供连续字节流，没有 RPC 消息边界。一次 `send` 的数据
 
 | 偏移 | 大小 | 字段 | 用途 |
 |---:|---:|---|---|
-| 0 | 4 | `magic` | 识别 AsterRPC 帧，固定为 `0x4D525043` |
+| 0 | 4 | `magic` | 识别 AsterRPC 帧，固定为 `0x41525043`（`ARPC`） |
 | 4 | 1 | `version` | 协议版本，当前为 3 |
 | 5 | 1 | `message_type` | Request 或 Response |
 | 6 | 1 | `codec` | 业务 payload 编码，当前只支持 Protobuf |

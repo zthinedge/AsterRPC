@@ -1,11 +1,11 @@
-#include "minirpc/common/ThreadPool.h"
+#include "asterrpc/common/ThreadPool.h"
 
 #include <condition_variable>
 #include <cstddef>
 #include <cstdlib>
 #include <mutex>
 
-using minirpc::common::ThreadPool;
+using asterrpc::common::ThreadPool;
 
 namespace{
 

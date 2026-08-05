@@ -1,13 +1,13 @@
-#include "minirpc/net/Connector.h"
-#include "minirpc/net/EventLoop.h"
-#include "minirpc/net/InetAddress.h"
+#include "asterrpc/net/Connector.h"
+#include "asterrpc/net/EventLoop.h"
+#include "asterrpc/net/InetAddress.h"
 
 #include <cassert>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
-using namespace minirpc::net;
+using namespace asterrpc::net;
 
 int main(){
     int listen_fd=::socket(AF_INET,SOCK_STREAM,0);

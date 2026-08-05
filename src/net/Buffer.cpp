@@ -1,6 +1,6 @@
-#include "minirpc/net/Buffer.h"
+#include "asterrpc/net/Buffer.h"
 
-namespace minirpc::net{
+namespace asterrpc::net{
 
 Buffer::Buffer(size_t size)
     : buf_(size),

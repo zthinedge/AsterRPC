@@ -2,14 +2,14 @@
 
 #include "calculator.pb.h"
 
-namespace minirpc::rpc{
+namespace asterrpc::rpc{
 class RpcServer;
 }
 
-namespace minirpc::example::calculator{
+namespace asterrpc::example::calculator{
 
 inline constexpr const char* kCalculatorServiceName=
-    "minirpc.example.calculator.CalculatorService";
+    "asterrpc.example.calculator.CalculatorService";
 inline constexpr const char* kAddMethodName="Add";
 
 class CalculatorService{

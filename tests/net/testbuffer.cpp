@@ -1,9 +1,9 @@
-#include "minirpc/net/Buffer.h"
+#include "asterrpc/net/Buffer.h"
 
 #include <cassert>
 #include <string>
 
-using minirpc::net::Buffer;
+using asterrpc::net::Buffer;
 
 int main() {
     Buffer buffer(4);

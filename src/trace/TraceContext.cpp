@@ -1,10 +1,10 @@
-#include "minirpc/trace/TraceContext.h"
+#include "asterrpc/trace/TraceContext.h"
 
 #include <algorithm>
 #include <random>
 #include <utility>
 
-namespace minirpc::trace{
+namespace asterrpc::trace{
 namespace{
 
 thread_local std::optional<TraceContext> current_context;

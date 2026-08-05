@@ -1,5 +1,5 @@
-#include "minirpc/log/AsyncLogger.h"
-#include "minirpc/log/LogMacros.h"
+#include "asterrpc/log/AsyncLogger.h"
+#include "asterrpc/log/LogMacros.h"
 
 #include <filesystem>
 #include <iostream>
@@ -7,7 +7,7 @@
 #include <thread>
 #include <vector>
 
-using namespace minirpc::log;
+using namespace asterrpc::log;
 
 int main(){
     LoggerOptions options;
@@ -20,8 +20,8 @@ int main(){
 
     AsyncLogger logger(options);
 
-    MINIRPC_LOG_DEBUG(logger,"this debug log is filtered");
-    MINIRPC_LOG_INFO(logger,"async logger demo started");
+    ASTERRPC_LOG_DEBUG(logger,"this debug log is filtered");
+    ASTERRPC_LOG_INFO(logger,"async logger demo started");
 
     constexpr int thread_count=4;
     constexpr int logs_per_thread=100;
@@ -30,7 +30,7 @@ int main(){
     for(int thread_index=0;thread_index<thread_count;++thread_index){
         threads.emplace_back([&logger,thread_index](){
             for(int index=0;index<logs_per_thread;++index){
-                MINIRPC_LOG_INFO(
+                ASTERRPC_LOG_INFO(
                     logger,
                     "worker="+std::to_string(thread_index)+
                     " record="+std::to_string(index)+
@@ -44,7 +44,7 @@ int main(){
         thread.join();
     }
 
-    MINIRPC_LOG_WARN(logger,"async logger demo is stopping");
+    ASTERRPC_LOG_WARN(logger,"async logger demo is stopping");
     logger.Stop();
 
     LoggerStats stats=logger.GetStats();

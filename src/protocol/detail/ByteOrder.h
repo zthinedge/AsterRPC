@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 
-namespace minirpc::protocol::detail{
+namespace asterrpc::protocol::detail{
 
 inline void AppendUint8(
     std::string* output,

@@ -1,7 +1,7 @@
-#include "minirpc/registry/ZooKeeperDiscovery.h"
+#include "asterrpc/registry/ZooKeeperDiscovery.h"
 
-#include "minirpc/registry/ZooKeeperClient.h"
-#include "minirpc/registry/ZooKeeperProvider.h"
+#include "asterrpc/registry/ZooKeeperClient.h"
+#include "asterrpc/registry/ZooKeeperProvider.h"
 
 #include <zookeeper/zookeeper.h>
 
@@ -14,7 +14,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace minirpc::registry{
+namespace asterrpc::registry{
 namespace{
 
 std::optional<cluster::Endpoint> ParseEndpoint(

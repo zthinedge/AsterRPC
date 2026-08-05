@@ -2,7 +2,7 @@
 
 #include <string_view>
 
-namespace minirpc::gateway{
+namespace asterrpc::gateway{
 
 std::string_view AdminPageHtml()noexcept;
 

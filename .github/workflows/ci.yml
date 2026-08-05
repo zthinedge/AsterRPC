@@ -14,11 +14,19 @@ concurrency:
 
 jobs:
   build-and-test:
-    name: Build and test
+    name: Build and test (${{ matrix.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: core
+            zookeeper: "OFF"
+          - name: zookeeper
+            zookeeper: "ON"
     env:
-      BUILD_DIR: cmake-build-ci
+      BUILD_DIR: cmake-build-ci-${{ matrix.name }}
 
     steps:
       - name: Checkout repository
@@ -28,12 +36,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes \
+            libzookeeper-mt-dev \
             libprotobuf-dev \
             nlohmann-json3-dev \
             protobuf-compiler
 
       - name: Configure CMake
-        run: cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug
+        run: |
+          cmake -S . -B "$BUILD_DIR" \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DASTERRPC_WITH_ZOOKEEPER="${{ matrix.zookeeper }}"
 
       - name: Build
         run: cmake --build "$BUILD_DIR" --parallel

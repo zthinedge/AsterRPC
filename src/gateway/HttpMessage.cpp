@@ -1,6 +1,6 @@
-#include "minirpc/gateway/HttpMessage.h"
+#include "asterrpc/gateway/HttpMessage.h"
 
-#include "minirpc/net/Buffer.h"
+#include "asterrpc/net/Buffer.h"
 
 #include <algorithm>
 #include <cctype>
@@ -9,7 +9,7 @@
 #include <stdexcept>
 #include <string_view>
 
-namespace minirpc::gateway{
+namespace asterrpc::gateway{
 namespace{
 
 std::string Lower(std::string value){

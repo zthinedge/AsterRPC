@@ -1,4 +1,4 @@
-#include "minirpc/gateway/AdminApi.h"
+#include "asterrpc/gateway/AdminApi.h"
 
 #include "AdminPage.h"
 
@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <string_view>
 
-namespace minirpc::gateway{
+namespace asterrpc::gateway{
 namespace{
 
 using Json=nlohmann::json;

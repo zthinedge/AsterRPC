@@ -1,7 +1,7 @@
-#include "minirpc/net/EventLoop.h"
-#include "minirpc/net/InetAddress.h"
-#include "minirpc/net/TcpClient.h"
-#include "minirpc/net/TcpServer.h"
+#include "asterrpc/net/EventLoop.h"
+#include "asterrpc/net/InetAddress.h"
+#include "asterrpc/net/TcpClient.h"
+#include "asterrpc/net/TcpServer.h"
 
 #include <cassert>
 #include <cstdint>
@@ -10,7 +10,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-using namespace minirpc::net;
+using namespace asterrpc::net;
 
 namespace{
 
@@ -61,13 +61,13 @@ int main(){
     int error=0;
 
     client.SetConnectionCallback([&client](TcpConnection*){
-        client.Send("hello mini-rpc");
+        client.Send("hello AsterRPC");
     });
 
     client.SetMessageCallback(
         [&loop,&received](TcpConnection*,Buffer* buffer){
             std::string message=buffer->RetrieveAllAsString();
-            received=message=="hello mini-rpc";
+            received=message=="hello AsterRPC";
             loop.Stop();
         }
     );

@@ -1,9 +1,9 @@
-#include "minirpc/net/Acceptor.h"
-#include "minirpc/net/InetAddress.h"
+#include "asterrpc/net/Acceptor.h"
+#include "asterrpc/net/InetAddress.h"
 
 #include <utility>
 
-namespace minirpc::net{
+namespace asterrpc::net{
 
 Acceptor::Acceptor(EventLoop*loop,const InetAddress& addr)
     :listen_socket_(),

@@ -1,11 +1,11 @@
-#include "minirpc/health/HealthService.h"
-#include "minirpc/net/Buffer.h"
-#include "minirpc/net/EventLoop.h"
-#include "minirpc/net/InetAddress.h"
-#include "minirpc/protocol/RpcCodec.h"
-#include "minirpc/rpc/RpcServer.h"
-#include "minirpc/rpc/ServiceDispatcher.h"
-#include "minirpc/trace/TraceContext.h"
+#include "asterrpc/health/HealthService.h"
+#include "asterrpc/net/Buffer.h"
+#include "asterrpc/net/EventLoop.h"
+#include "asterrpc/net/InetAddress.h"
+#include "asterrpc/protocol/RpcCodec.h"
+#include "asterrpc/rpc/RpcServer.h"
+#include "asterrpc/rpc/ServiceDispatcher.h"
+#include "asterrpc/trace/TraceContext.h"
 
 #include <arpa/inet.h>
 #include <cerrno>
@@ -20,7 +20,7 @@
 #include <unordered_map>
 #include <unistd.h>
 
-using namespace minirpc;
+using namespace asterrpc;
 
 namespace{
 

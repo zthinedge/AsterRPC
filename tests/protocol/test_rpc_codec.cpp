@@ -1,13 +1,13 @@
-#include "minirpc/net/Buffer.h"
-#include "minirpc/protocol/RpcCodec.h"
+#include "asterrpc/net/Buffer.h"
+#include "asterrpc/protocol/RpcCodec.h"
 
 #include <cassert>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
 
-using namespace minirpc::net;
-using namespace minirpc::protocol;
+using namespace asterrpc::net;
+using namespace asterrpc::protocol;
 
 namespace{
 
@@ -146,7 +146,7 @@ void TestWireHeaderLayout(){
     RpcCodec codec;
     std::string bytes=codec.Encode(MakeRequest());
 
-    assert(static_cast<unsigned char>(bytes[0])==0x4d);
+    assert(static_cast<unsigned char>(bytes[0])==0x41);
     assert(static_cast<unsigned char>(bytes[1])==0x52);
     assert(static_cast<unsigned char>(bytes[2])==0x50);
     assert(static_cast<unsigned char>(bytes[3])==0x43);

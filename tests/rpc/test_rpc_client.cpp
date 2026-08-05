@@ -1,14 +1,14 @@
 #include "CalculatorService.h"
 #include "CalculatorStub.h"
-#include "minirpc/net/Buffer.h"
-#include "minirpc/net/EventLoop.h"
-#include "minirpc/net/InetAddress.h"
-#include "minirpc/protocol/RpcCodec.h"
-#include "minirpc/protocol/RpcMessage.h"
-#include "minirpc/rpc/PendingCalls.h"
-#include "minirpc/trace/TraceContext.h"
-#include "minirpc/rpc/RpcClient.h"
-#include "minirpc/rpc/RpcServer.h"
+#include "asterrpc/net/Buffer.h"
+#include "asterrpc/net/EventLoop.h"
+#include "asterrpc/net/InetAddress.h"
+#include "asterrpc/protocol/RpcCodec.h"
+#include "asterrpc/protocol/RpcMessage.h"
+#include "asterrpc/rpc/PendingCalls.h"
+#include "asterrpc/trace/TraceContext.h"
+#include "asterrpc/rpc/RpcClient.h"
+#include "asterrpc/rpc/RpcServer.h"
 
 #include <arpa/inet.h>
 #include <cassert>
@@ -24,8 +24,8 @@
 #include <unistd.h>
 #include <vector>
 
-using namespace minirpc;
-using namespace minirpc::example::calculator;
+using namespace asterrpc;
+using namespace asterrpc::example::calculator;
 
 namespace{
 

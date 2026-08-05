@@ -1,7 +1,7 @@
 # AsterRPC 目录结构
 
 ```text
-include/minirpc/
+include/asterrpc/
   cluster/         连接池、端点、重试策略和 Round Robin
   config/          运行时配置
   gateway/         HTTP Gateway 与管理 API

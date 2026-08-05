@@ -1,10 +1,10 @@
 #include "calculator.pb.h"
-#include "minirpc/gateway/AdminApi.h"
-#include "minirpc/gateway/HttpMessage.h"
-#include "minirpc/gateway/ProtobufHttpGateway.h"
-#include "minirpc/gateway/RpcChannel.h"
-#include "minirpc/net/Buffer.h"
-#include "minirpc/trace/TraceContext.h"
+#include "asterrpc/gateway/AdminApi.h"
+#include "asterrpc/gateway/HttpMessage.h"
+#include "asterrpc/gateway/ProtobufHttpGateway.h"
+#include "asterrpc/gateway/RpcChannel.h"
+#include "asterrpc/net/Buffer.h"
+#include "asterrpc/trace/TraceContext.h"
 
 #include <google/protobuf/descriptor.h>
 #include <nlohmann/json.hpp>
@@ -14,8 +14,8 @@
 #include <string>
 #include <utility>
 
-using namespace minirpc;
-using namespace minirpc::example::calculator;
+using namespace asterrpc;
+using namespace asterrpc::example::calculator;
 
 namespace{
 
@@ -73,7 +73,7 @@ public:
     std::vector<gateway::AdminServiceInfo>
     Services()const override{
         return {{
-            "minirpc.example.calculator.CalculatorService",
+            "asterrpc.example.calculator.CalculatorService",
             {"Add"}
         }};
     }
@@ -207,7 +207,7 @@ void TestDynamicProtobufCallAndTrace(){
     assert(channel.trace_id=="gateway-test-trace");
     assert(
         channel.service==
-        "minirpc.example.calculator.CalculatorService"
+        "asterrpc.example.calculator.CalculatorService"
     );
     assert(channel.method=="Add");
     assert(channel.timeout==std::chrono::seconds(2));

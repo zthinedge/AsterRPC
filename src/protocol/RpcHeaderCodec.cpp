@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <stdexcept>
 
-namespace minirpc::protocol::detail{
+namespace asterrpc::protocol::detail{
 namespace{
 
 void SetError(std::string* error,const std::string& value){

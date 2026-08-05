@@ -1,6 +1,6 @@
-#include "minirpc/registry/ZooKeeperProvider.h"
+#include "asterrpc/registry/ZooKeeperProvider.h"
 
-#include "minirpc/registry/ZooKeeperClient.h"
+#include "asterrpc/registry/ZooKeeperClient.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-namespace minirpc::registry{
+namespace asterrpc::registry{
 namespace{
 
 void ValidateServiceName(const std::string& service_name){
@@ -115,17 +115,20 @@ public:
                 }
             );
             if(existing!=registrations_.end()){
-                return;
+                id=existing->id;
+            }else{
+                id=next_registration_id_++;
+                while(id==0){
+                    id=next_registration_id_++;
+                }
+                registrations_.push_back({
+                    id,
+                    std::move(service_name),
+                    std::move(endpoint),
+                    {},
+                    0
+                });
             }
-
-            id=next_registration_id_++;
-            registrations_.push_back({
-                id,
-                std::move(service_name),
-                std::move(endpoint),
-                {},
-                0
-            });
         }
 
         ZooKeeperConnectionEvent event=client_->CurrentEvent();

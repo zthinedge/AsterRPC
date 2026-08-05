@@ -11,7 +11,7 @@
 #include <unistd.h>
 #include <vector>
 
-namespace minirpc::log{
+namespace asterrpc::log{
 namespace{
 
 std::tm ToLocalTime(std::time_t time){

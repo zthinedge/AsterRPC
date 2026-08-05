@@ -1,8 +1,8 @@
-#include "minirpc/cluster/Endpoint.h"
-#include "minirpc/registry/ZooKeeperClient.h"
-#include "minirpc/registry/ZooKeeperConfigCenter.h"
-#include "minirpc/registry/ZooKeeperDiscovery.h"
-#include "minirpc/registry/ZooKeeperProvider.h"
+#include "asterrpc/cluster/Endpoint.h"
+#include "asterrpc/registry/ZooKeeperClient.h"
+#include "asterrpc/registry/ZooKeeperConfigCenter.h"
+#include "asterrpc/registry/ZooKeeperDiscovery.h"
+#include "asterrpc/registry/ZooKeeperProvider.h"
 
 #include <atomic>
 #include <cassert>
@@ -14,30 +14,30 @@
 #include <string>
 #include <thread>
 
-using namespace minirpc;
+using namespace asterrpc;
 
 namespace{
 
 void TestProviderPaths(){
     assert(
         registry::ZooKeeperProvider::ProviderParentPath(
-            "/mini-rpc/services",
+            "/aster-rpc/services",
             "UserService"
         )==
-        "/mini-rpc/services/UserService/providers"
+        "/aster-rpc/services/UserService/providers"
     );
     assert(
         registry::ZooKeeperProvider::ProviderParentPath(
-            "/mini-rpc/services/",
+            "/aster-rpc/services/",
             "OrderService"
         )==
-        "/mini-rpc/services/OrderService/providers"
+        "/aster-rpc/services/OrderService/providers"
     );
 
     bool rejected=false;
     try{
         registry::ZooKeeperProvider::ProviderParentPath(
-            "/mini-rpc/services",
+            "/aster-rpc/services",
             "bad/service"
         );
     }catch(const std::invalid_argument&){
@@ -48,17 +48,17 @@ void TestProviderPaths(){
 
 void TestConfigPaths(){
     assert(registry::ZooKeeperConfigCenter::GlobalPath(
-        "/mini-rpc/config"
-    )=="/mini-rpc/config/global");
+        "/aster-rpc/config"
+    )=="/aster-rpc/config/global");
     assert(registry::ZooKeeperConfigCenter::ServicePath(
-        "/mini-rpc/config/",
+        "/aster-rpc/config/",
         "UserService"
-    )=="/mini-rpc/config/UserService");
+    )=="/aster-rpc/config/UserService");
 
     bool rejected=false;
     try{
         registry::ZooKeeperConfigCenter::ServicePath(
-            "/mini-rpc/config",
+            "/aster-rpc/config",
             "bad/service"
         );
     }catch(const std::invalid_argument&){
@@ -171,7 +171,7 @@ void TestRealZooKeeper(const std::string& servers){
     assert(connected);
 
     const std::string watch_probe_path=
-        "/mini-rpc/config/watch-probe";
+        "/aster-rpc/config/watch-probe";
     client->EnsurePersistentPath(watch_probe_path);
     client->SetData(watch_probe_path,"before");
     std::atomic_bool data_watch_fired{false};
@@ -227,12 +227,12 @@ void TestRealZooKeeper(const std::string& servers){
 
     assert(
         user_node.find(
-            "/mini-rpc/services/UserService/providers/instance-"
+            "/aster-rpc/services/UserService/providers/instance-"
         )==0
     );
     assert(
         order_node.find(
-            "/mini-rpc/services/OrderService/providers/instance-"
+            "/aster-rpc/services/OrderService/providers/instance-"
         )==0
     );
 
@@ -248,16 +248,16 @@ void TestRealZooKeeper(const std::string& servers){
     );
     assert(WaitForProviderCount(discovery,"UserService",3));
 
-    client->EnsurePersistentPath("/mini-rpc/config/global");
+    client->EnsurePersistentPath("/aster-rpc/config/global");
     client->SetData(
-        "/mini-rpc/config/global",
+        "/aster-rpc/config/global",
         R"({"default_timeout_ms":1001,"retry_count":2})"
     );
     client->EnsurePersistentPath(
-        "/mini-rpc/config/UserService"
+        "/aster-rpc/config/UserService"
     );
     client->SetData(
-        "/mini-rpc/config/UserService",
+        "/aster-rpc/config/UserService",
         "{}"
     );
 
@@ -274,7 +274,7 @@ void TestRealZooKeeper(const std::string& servers){
     ));
 
     client->SetData(
-        "/mini-rpc/config/UserService",
+        "/aster-rpc/config/UserService",
         R"({"default_timeout_ms":201,"ewma_alpha":0.51})"
     );
     assert(WaitUntil(
@@ -301,12 +301,12 @@ int main(){
     TestDiscoveryNotReady();
 
     const char* servers=std::getenv(
-        "MINIRPC_ZOOKEEPER_TEST_SERVERS"
+        "ASTERRPC_ZOOKEEPER_TEST_SERVERS"
     );
     if(servers==nullptr||*servers=='\0'){
         std::cout
             <<"ZooKeeper integration test skipped; set "
-            <<"MINIRPC_ZOOKEEPER_TEST_SERVERS to enable it\n";
+            <<"ASTERRPC_ZOOKEEPER_TEST_SERVERS to enable it\n";
         return 0;
     }
 

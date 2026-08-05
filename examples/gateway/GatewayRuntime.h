@@ -1,7 +1,7 @@
 #pragma once
 
-#include "minirpc/gateway/AdminApi.h"
-#include "minirpc/gateway/RpcChannel.h"
+#include "asterrpc/gateway/AdminApi.h"
+#include "asterrpc/gateway/RpcChannel.h"
 
 #include <memory>
 
@@ -9,29 +9,29 @@ namespace google::protobuf{
 class ServiceDescriptor;
 }
 
-namespace minirpc::cluster{
+namespace asterrpc::cluster{
 class ChannelManager;
 }
 
-namespace minirpc::log{
+namespace asterrpc::log{
 class AsyncLogger;
 }
 
-namespace minirpc::net{
+namespace asterrpc::net{
 class EventLoop;
 }
 
-namespace minirpc::registry{
+namespace asterrpc::registry{
 class ZooKeeperClient;
 class ZooKeeperConfigCenter;
 class ZooKeeperDiscovery;
 }
 
-namespace minirpc::example::gateway{
+namespace asterrpc::example::gateway{
 
 class GatewayRuntime final:
-    public minirpc::gateway::RpcChannel,
-    public minirpc::gateway::AdminDataSource{
+    public asterrpc::gateway::RpcChannel,
+    public asterrpc::gateway::AdminDataSource{
 public:
     GatewayRuntime(
         std::shared_ptr<registry::ZooKeeperClient> zk_client,
@@ -57,17 +57,17 @@ public:
         Completion completion
     )override;
 
-    std::vector<minirpc::gateway::AdminServiceInfo>
+    std::vector<asterrpc::gateway::AdminServiceInfo>
     Services()const override;
-    std::vector<minirpc::gateway::AdminInstanceInfo>
+    std::vector<asterrpc::gateway::AdminInstanceInfo>
     Instances()const override;
-    std::vector<minirpc::gateway::AdminEndpointMetrics>
+    std::vector<asterrpc::gateway::AdminEndpointMetrics>
     Metrics()const override;
-    std::vector<minirpc::gateway::AdminServiceConfig>
+    std::vector<asterrpc::gateway::AdminServiceConfig>
     Config()const override;
-    std::vector<minirpc::gateway::AdminTraceInfo>
+    std::vector<asterrpc::gateway::AdminTraceInfo>
     Traces()const override;
-    minirpc::gateway::AdminHealthInfo Health()const override;
+    asterrpc::gateway::AdminHealthInfo Health()const override;
 
 private:
     class Impl;

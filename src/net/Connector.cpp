@@ -1,10 +1,10 @@
-#include "minirpc/net/Connector.h"
+#include "asterrpc/net/Connector.h"
 
 #include <cerrno>
 #include <sys/socket.h>
 #include <utility>
 
-namespace minirpc::net{
+namespace asterrpc::net{
 
 Connector::Connector(EventLoop*loop,const InetAddress& server_addr)
     :server_addr_(server_addr),

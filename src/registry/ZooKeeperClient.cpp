@@ -1,4 +1,4 @@
-#include "minirpc/registry/ZooKeeperClient.h"
+#include "asterrpc/registry/ZooKeeperClient.h"
 
 #include <zookeeper/zookeeper.h>
 
@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-namespace minirpc::registry{
+namespace asterrpc::registry{
 namespace{
 
 std::string ErrorMessage(const std::string& operation,int code){

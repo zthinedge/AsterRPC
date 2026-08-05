@@ -1,12 +1,12 @@
 #include "CalculatorService.h"
-#include "minirpc/cluster/Endpoint.h"
-#include "minirpc/log/AsyncLogger.h"
-#include "minirpc/log/LogMacros.h"
-#include "minirpc/net/EventLoop.h"
-#include "minirpc/net/InetAddress.h"
-#include "minirpc/registry/ZooKeeperClient.h"
-#include "minirpc/registry/ZooKeeperProvider.h"
-#include "minirpc/rpc/RpcServer.h"
+#include "asterrpc/cluster/Endpoint.h"
+#include "asterrpc/log/AsyncLogger.h"
+#include "asterrpc/log/LogMacros.h"
+#include "asterrpc/net/EventLoop.h"
+#include "asterrpc/net/InetAddress.h"
+#include "asterrpc/registry/ZooKeeperClient.h"
+#include "asterrpc/registry/ZooKeeperProvider.h"
+#include "asterrpc/rpc/RpcServer.h"
 
 #include <chrono>
 #include <csignal>
@@ -18,8 +18,8 @@
 #include <string>
 #include <thread>
 
-using namespace minirpc;
-using namespace minirpc::example::calculator;
+using namespace asterrpc;
+using namespace asterrpc::example::calculator;
 
 namespace{
 
@@ -66,7 +66,7 @@ public:
         AddResponse* response
     )override{
         response->set_result(request.a()+request.b());
-        MINIRPC_LOG_INFO(
+        ASTERRPC_LOG_INFO(
             *logger_,
             "gateway backend CalculatorService.Add result="+
             std::to_string(response->result())
@@ -93,12 +93,6 @@ int main(int argc,char* argv[]){
             throw std::runtime_error("ZooKeeper connect timeout");
         }
 
-        registry::ZooKeeperProvider provider(zk_client);
-        provider.Register(
-            kCalculatorServiceName,
-            cluster::Endpoint("127.0.0.1",arguments.port)
-        );
-
         log::LoggerOptions logger_options;
         logger_options.file_path=
             "logs/gateway_calculator_server.log";
@@ -112,6 +106,12 @@ int main(int argc,char* argv[]){
         CalculatorServiceAdapter adapter(&service);
         adapter.RegisterTo(&server);
         server.Start();
+
+        registry::ZooKeeperProvider provider(zk_client);
+        provider.Register(
+            kCalculatorServiceName,
+            cluster::Endpoint("127.0.0.1",arguments.port)
+        );
 
         std::cout<<"gateway Calculator RPC backend ready on "
                  <<"0.0.0.0:"<<arguments.port<<'\n';

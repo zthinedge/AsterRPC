@@ -1,6 +1,6 @@
-#include "minirpc/log/AsyncLogger.h"
-#include "minirpc/log/LogMacros.h"
-#include "minirpc/trace/TraceContext.h"
+#include "asterrpc/log/AsyncLogger.h"
+#include "asterrpc/log/LogMacros.h"
+#include "asterrpc/trace/TraceContext.h"
 
 #include <cassert>
 #include <chrono>
@@ -17,7 +17,7 @@
 #include <unistd.h>
 #include <vector>
 
-using namespace minirpc::log;
+using namespace asterrpc::log;
 
 namespace{
 
@@ -94,7 +94,7 @@ std::filesystem::path MakeTempDirectory(){
     auto now=std::chrono::steady_clock::now().time_since_epoch().count();
     std::filesystem::path directory=
         std::filesystem::temp_directory_path()/
-        ("minirpc-log-test-"+std::to_string(::getpid())+'-'+
+        ("asterrpc-log-test-"+std::to_string(::getpid())+'-'+
          std::to_string(now));
     std::filesystem::create_directories(directory);
     return directory;
@@ -127,7 +127,7 @@ void TestLevelAndSourceMetadata(){
     assert(!logger.Log(
         LogLevel::Debug,__FILE__,__LINE__,__func__,"hidden"
     ));
-    MINIRPC_LOG_INFO(logger,"visible message");
+    ASTERRPC_LOG_INFO(logger,"visible message");
     logger.Stop();
 
     std::string contents=sink_ptr->Contents();
@@ -192,18 +192,18 @@ void TestTraceMetadata(){
     MemorySink* sink_ptr=sink.get();
     AsyncLogger logger(TestOptions(),std::move(sink));
 
-    minirpc::trace::TraceContext context;
+    asterrpc::trace::TraceContext context;
     context.trace_id="trace-123";
     context.span_id="span-456";
     context.parent_span_id="span-parent";
     context.deadline_us=789;
 
     {
-        minirpc::trace::TraceScope scope(context);
-        MINIRPC_LOG_INFO(logger,"traced message");
+        asterrpc::trace::TraceScope scope(context);
+        ASTERRPC_LOG_INFO(logger,"traced message");
     }
 
-    MINIRPC_LOG_INFO(logger,"untraced message");
+    ASTERRPC_LOG_INFO(logger,"untraced message");
     logger.Stop();
 
     std::string contents=sink_ptr->Contents();

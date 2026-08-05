@@ -15,25 +15,25 @@ sudo apt install libzookeeper-mt-dev
 
 ```bash
 cmake -S . -B build-zk \
-  -DMINIRPC_WITH_ZOOKEEPER=ON
+  -DASTERRPC_WITH_ZOOKEEPER=ON
 cmake --build build-zk -j
 ```
 
-业务程序需要链接 `minirpc_zookeeper`。
+业务程序需要链接 `asterrpc_zookeeper`。
 
 ## Provider 节点
 
 Provider 使用持久父节点和临时顺序子节点：
 
 ```text
-/mini-rpc/services/UserService/providers/instance-xxxxxxxxxx
-/mini-rpc/services/OrderService/providers/instance-xxxxxxxxxx
+/aster-rpc/services/UserService/providers/instance-xxxxxxxxxx
+/aster-rpc/services/OrderService/providers/instance-xxxxxxxxxx
 ```
 
 节点数据为 Provider 的 `ip:port`。
 
 ```cpp
-using namespace minirpc;
+using namespace asterrpc;
 
 registry::ZooKeeperClientOptions options;
 options.servers="127.0.0.1:2181";
@@ -76,8 +76,8 @@ Watch 触发后会重新拉取全部 Provider，并在同一次操作中重新�
 配置中心同时监听全局节点和服务节点：
 
 ```text
-/mini-rpc/config/global
-/mini-rpc/config/UserService
+/aster-rpc/config/global
+/aster-rpc/config/UserService
 ```
 
 节点数据为 JSON 对象。服务级配置覆盖同名的全局配置，没有覆盖的字段
@@ -131,7 +131,7 @@ Registry 示例已经将热配置接入默认超时、重试、RoundRobin/P2C-EW
 ./build-zk/registry_client 127.0.0.1:2181 80 250
 ```
 
-运行期间修改 `/mini-rpc/config/RegistryDemoService` 的
+运行期间修改 `/aster-rpc/config/RegistryDemoService` 的
 `load_balancer`，客户端无需重启即可切换算法。P2C-EWMA 会先探索每个
 冷节点；获得 200ms 延迟样本后，慢节点的分数上升，后续流量会主要转向
 9001。
@@ -141,15 +141,25 @@ Registry 示例已经将热配置接入默认超时、重试、RoundRobin/P2C-EW
 `trace_id`，服务端创建新的 `span_id` 并记录上游调用 span 为
 `parent_span_id`，可直接用 `trace_id` 串联调用日志。
 
-## RoundRobin动态实例验收
+## 动态实例验收
 
-`RoundRobin`直接读取服务发现发布的不可变快照，使用原子序号轮询。实例
+`RoundRobin` 直接读取服务发现发布的不可变快照，使用原子序号轮询。实例
 数量变化后，每次选择都会对当前快照大小取模，不会沿用旧快照的数组下标。
+P2C-EWMA 的选择具有随机性，因此动态发现验收只检查实例快照是否收敛以及
+剩余实例能否继续处理请求；RoundRobin 的严格轮询由单元测试验证。
 
 一键验收需要当前用户能够访问 Docker daemon：
 
 ```bash
-./scripts/test_zookeeper_round_robin.sh
+./scripts/test_zookeeper_discovery.sh
+```
+
+如果 ZooKeeper 已经由其他方式启动，或者当前用户无权访问 Docker daemon，
+可以复用现有服务：
+
+```bash
+ASTERRPC_ZOOKEEPER_SERVERS=127.0.0.1:2181 \
+  ./scripts/test_zookeeper_discovery.sh
 ```
 
 脚本会：
@@ -172,6 +182,6 @@ Session 连接成功后重新创建临时顺序节点。
 默认测试只验证参数和节点路径。连接真实 ZooKeeper 的测试需要设置：
 
 ```bash
-MINIRPC_ZOOKEEPER_TEST_SERVERS=127.0.0.1:2181 \
+ASTERRPC_ZOOKEEPER_TEST_SERVERS=127.0.0.1:2181 \
   ctest --test-dir build-zk -R zookeeper --output-on-failure
 ```

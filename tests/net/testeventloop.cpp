@@ -1,4 +1,4 @@
-#include "minirpc/net/EventLoop.h"
+#include "asterrpc/net/EventLoop.h"
 
 #include <atomic>
 #include <cassert>
@@ -7,7 +7,7 @@
 #include <thread>
 #include <vector>
 
-using namespace minirpc::net;
+using namespace asterrpc::net;
 
 namespace{
 

@@ -1,11 +1,11 @@
-#include "minirpc/net/TcpServer.h"
-#include "minirpc/net/EventLoop.h"
+#include "asterrpc/net/TcpServer.h"
+#include "asterrpc/net/EventLoop.h"
 
 #include <future>
 #include <utility>
 #include <vector>
 
-namespace minirpc::net{
+namespace asterrpc::net{
 
 TcpServer::TcpServer(
     EventLoop* loop,

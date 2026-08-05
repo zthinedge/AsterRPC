@@ -1,10 +1,10 @@
 #include "CalculatorService.h"
 
-#include "minirpc/rpc/RpcServer.h"
+#include "asterrpc/rpc/RpcServer.h"
 
 #include <stdexcept>
 
-namespace minirpc::example::calculator{
+namespace asterrpc::example::calculator{
 
 CalculatorServiceAdapter::CalculatorServiceAdapter(
     CalculatorService* service

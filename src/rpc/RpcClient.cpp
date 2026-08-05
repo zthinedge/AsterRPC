@@ -1,16 +1,16 @@
-#include "minirpc/rpc/RpcClient.h"
+#include "asterrpc/rpc/RpcClient.h"
 
-#include "minirpc/cluster/RetryPolicy.h"
-#include "minirpc/net/Buffer.h"
-#include "minirpc/net/EventLoop.h"
-#include "minirpc/net/TcpConnection.h"
+#include "asterrpc/cluster/RetryPolicy.h"
+#include "asterrpc/net/Buffer.h"
+#include "asterrpc/net/EventLoop.h"
+#include "asterrpc/net/TcpConnection.h"
 
 #include <chrono>
 #include <limits>
 #include <stdexcept>
 #include <utility>
 
-namespace minirpc::rpc{
+namespace asterrpc::rpc{
 namespace{
 
 std::uint64_t CurrentTimeMicros(){

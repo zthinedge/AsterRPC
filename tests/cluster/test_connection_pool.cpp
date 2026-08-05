@@ -1,13 +1,13 @@
-#include "minirpc/cluster/ChannelManager.h"
-#include "minirpc/cluster/ConnectionPool.h"
-#include "minirpc/cluster/Endpoint.h"
-#include "minirpc/cluster/RetryPolicy.h"
-#include "minirpc/net/EventLoop.h"
-#include "minirpc/net/InetAddress.h"
-#include "minirpc/protocol/RpcMessage.h"
-#include "minirpc/rpc/CallOptions.h"
-#include "minirpc/rpc/RpcServer.h"
-#include "minirpc/trace/TraceContext.h"
+#include "asterrpc/cluster/ChannelManager.h"
+#include "asterrpc/cluster/ConnectionPool.h"
+#include "asterrpc/cluster/Endpoint.h"
+#include "asterrpc/cluster/RetryPolicy.h"
+#include "asterrpc/net/EventLoop.h"
+#include "asterrpc/net/InetAddress.h"
+#include "asterrpc/protocol/RpcMessage.h"
+#include "asterrpc/rpc/CallOptions.h"
+#include "asterrpc/rpc/RpcServer.h"
+#include "asterrpc/trace/TraceContext.h"
 
 #include <arpa/inet.h>
 #include <atomic>
@@ -24,7 +24,7 @@
 #include <unistd.h>
 #include <vector>
 
-using namespace minirpc;
+using namespace asterrpc;
 
 namespace{
 

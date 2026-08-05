@@ -127,7 +127,7 @@ ZooKeeper 集成为可选功能，默认关闭：
 ```bash
 cmake -S . -B build \
   -DCMAKE_BUILD_TYPE=Release \
-  -DMINIRPC_WITH_ZOOKEEPER=ON
+  -DASTERRPC_WITH_ZOOKEEPER=ON
 
 cmake --build build -j
 ```

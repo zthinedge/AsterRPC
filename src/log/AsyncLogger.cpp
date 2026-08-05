@@ -1,6 +1,6 @@
-#include "minirpc/log/AsyncLogger.h"
+#include "asterrpc/log/AsyncLogger.h"
 
-#include "minirpc/trace/TraceContext.h"
+#include "asterrpc/trace/TraceContext.h"
 #include "RollingFileSink.h"
 
 #include <algorithm>
@@ -13,7 +13,7 @@
 #include <string>
 #include <utility>
 
-namespace minirpc::log{
+namespace asterrpc::log{
 namespace{
 
 void ValidateOptions(const LoggerOptions& options){
@@ -281,7 +281,7 @@ void AsyncLogger::WriteDropReport()noexcept{
 
     try{
         std::string message=
-            "[minirpc logger] dropped "+std::to_string(count)+
+            "[asterrpc logger] dropped "+std::to_string(count)+
             " log records because the queue was full\n";
         if(!sink_->Write(message)){
             write_errors_.fetch_add(1,std::memory_order_relaxed);

@@ -1,7 +1,7 @@
-#include "minirpc/net/Channel.h"
-#include "minirpc/net/EventLoop.h"
+#include "asterrpc/net/Channel.h"
+#include "asterrpc/net/EventLoop.h"
 #include <sys/epoll.h>
-namespace minirpc::net
+namespace asterrpc::net
 {
 
 Channel::Channel(EventLoop*loop,int fd)

@@ -1,9 +1,9 @@
-#include "minirpc/cluster/RoundRobin.h"
+#include "asterrpc/cluster/RoundRobin.h"
 
 #include <cstddef>
 #include <cstdint>
 
-namespace minirpc::cluster{
+namespace asterrpc::cluster{
 
 std::optional<Endpoint> RoundRobin::Select(
     const EndpointSnapshot& endpoints

@@ -1,8 +1,8 @@
-#include "minirpc/cluster/ChannelManager.h"
+#include "asterrpc/cluster/ChannelManager.h"
 
 #include <stdexcept>
 
-namespace minirpc::cluster{
+namespace asterrpc::cluster{
 
 ChannelManager::ChannelManager(net::EventLoop* loop):loop_(loop){
     if(loop_==nullptr){

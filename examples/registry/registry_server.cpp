@@ -1,11 +1,11 @@
-#include "minirpc/cluster/Endpoint.h"
-#include "minirpc/log/AsyncLogger.h"
-#include "minirpc/log/LogMacros.h"
-#include "minirpc/net/EventLoop.h"
-#include "minirpc/net/InetAddress.h"
-#include "minirpc/registry/ZooKeeperClient.h"
-#include "minirpc/registry/ZooKeeperProvider.h"
-#include "minirpc/rpc/RpcServer.h"
+#include "asterrpc/cluster/Endpoint.h"
+#include "asterrpc/log/AsyncLogger.h"
+#include "asterrpc/log/LogMacros.h"
+#include "asterrpc/net/EventLoop.h"
+#include "asterrpc/net/InetAddress.h"
+#include "asterrpc/registry/ZooKeeperClient.h"
+#include "asterrpc/registry/ZooKeeperProvider.h"
+#include "asterrpc/rpc/RpcServer.h"
 
 #include <chrono>
 #include <csignal>
@@ -17,7 +17,7 @@
 #include <string>
 #include <thread>
 
-using namespace minirpc;
+using namespace asterrpc;
 
 namespace{
 
@@ -96,15 +96,6 @@ int main(int argc,char* argv[]){
             throw std::runtime_error("ZooKeeper connect timeout");
         }
 
-        registry::ZooKeeperProvider provider(zk_client);
-        provider.Register(
-            kServiceName,
-            cluster::Endpoint(
-                arguments.advertise_ip,
-                arguments.port
-            )
-        );
-
         net::EventLoop loop;
         log::LoggerOptions logger_options;
         logger_options.file_path=
@@ -123,7 +114,7 @@ int main(int argc,char* argv[]){
                 delay=arguments.delay,
                 &logger
             ](const std::string&){
-                MINIRPC_LOG_INFO(
+                ASTERRPC_LOG_INFO(
                     logger,
                     "handling RegistryDemoService.WhoAmI"
                 );
@@ -134,6 +125,15 @@ int main(int argc,char* argv[]){
             }
         );
         server.Start();
+
+        registry::ZooKeeperProvider provider(zk_client);
+        provider.Register(
+            kServiceName,
+            cluster::Endpoint(
+                arguments.advertise_ip,
+                arguments.port
+            )
+        );
 
         std::cout
             <<"registry demo server ready endpoint="

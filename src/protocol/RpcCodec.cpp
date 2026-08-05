@@ -1,12 +1,12 @@
-#include "minirpc/protocol/RpcCodec.h"
-#include "minirpc/net/Buffer.h"
+#include "asterrpc/protocol/RpcCodec.h"
+#include "asterrpc/net/Buffer.h"
 #include "detail/RpcHeaderCodec.h"
 #include "detail/RpcMetaCodec.h"
 
 #include <stdexcept>
 #include <utility>
 
-namespace minirpc::protocol{
+namespace asterrpc::protocol{
 namespace{
 
 void SetError(std::string* error,const std::string& value){

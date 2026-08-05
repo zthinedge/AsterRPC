@@ -1,9 +1,9 @@
-#include "minirpc/cluster/ConnectionPool.h"
-#include "minirpc/cluster/Endpoint.h"
-#include "minirpc/net/EventLoop.h"
-#include "minirpc/protocol/RpcMessage.h"
-#include "minirpc/protocol/RpcMeta.h"
-#include "minirpc/rpc/CallOptions.h"
+#include "asterrpc/cluster/ConnectionPool.h"
+#include "asterrpc/cluster/Endpoint.h"
+#include "asterrpc/net/EventLoop.h"
+#include "asterrpc/protocol/RpcMessage.h"
+#include "asterrpc/protocol/RpcMeta.h"
+#include "asterrpc/rpc/CallOptions.h"
 
 #include <algorithm>
 #include <atomic>
@@ -182,11 +182,11 @@ BenchOptions ParseArguments(int argc,char* argv[]){
 class LoopThread{
 public:
     LoopThread(){
-        std::promise<minirpc::net::EventLoop*> ready;
+        std::promise<asterrpc::net::EventLoop*> ready;
         auto future=ready.get_future();
 
         thread_=std::thread([ready=std::move(ready)]()mutable{
-            minirpc::net::EventLoop loop;
+            asterrpc::net::EventLoop loop;
             ready.set_value(&loop);
             loop.Loop();
         });
@@ -203,7 +203,7 @@ public:
     LoopThread(const LoopThread&)=delete;
     LoopThread& operator=(const LoopThread&)=delete;
 
-    minirpc::net::EventLoop* Loop()const noexcept{
+    asterrpc::net::EventLoop* Loop()const noexcept{
         return loop_;
     }
 
@@ -217,7 +217,7 @@ public:
     }
 
 private:
-    minirpc::net::EventLoop* loop_=nullptr;
+    asterrpc::net::EventLoop* loop_=nullptr;
     std::thread thread_;
 };
 
@@ -249,8 +249,8 @@ struct BenchResult{
 };
 
 struct BenchTarget{
-    minirpc::cluster::ConnectionPool* pool=nullptr;
-    minirpc::net::EventLoop* loop=nullptr;
+    asterrpc::cluster::ConnectionPool* pool=nullptr;
+    asterrpc::net::EventLoop* loop=nullptr;
 };
 
 class AsyncBenchmark{
@@ -310,10 +310,10 @@ private:
                     target,
                     request_index,
                     request_started
-                ](minirpc::protocol::RpcMessage response){
+                ](asterrpc::protocol::RpcMessage response){
                     bool valid=
                         response.meta.status_code==
-                            minirpc::protocol::StatusCode::Ok&&
+                            asterrpc::protocol::StatusCode::Ok&&
                         response.payload==payload_;
                     std::string error;
                     if(!valid){
@@ -413,7 +413,7 @@ private:
     std::vector<BenchTarget> targets_;
     std::string payload_;
     std::vector<std::uint64_t> latencies_;
-    minirpc::rpc::CallOptions call_options_;
+    asterrpc::rpc::CallOptions call_options_;
 
     std::atomic_size_t next_request_{0};
     std::atomic_size_t completed_{0};
@@ -471,7 +471,7 @@ int main(int argc,char* argv[]){
         BenchOptions options=ParseArguments(argc,argv);
         std::vector<std::unique_ptr<LoopThread>> loop_threads;
         std::vector<
-            std::unique_ptr<minirpc::cluster::ConnectionPool>
+            std::unique_ptr<asterrpc::cluster::ConnectionPool>
         > pools;
         std::vector<BenchTarget> targets;
 
@@ -481,7 +481,7 @@ int main(int argc,char* argv[]){
 
         for(std::size_t index=0;index<options.io_threads;++index){
             auto loop_thread=std::make_unique<LoopThread>();
-            minirpc::cluster::ConnectionPoolOptions pool_options;
+            asterrpc::cluster::ConnectionPoolOptions pool_options;
             pool_options.max_connections=
                 options.connections/options.io_threads+
                 (index<options.connections%options.io_threads?1:0);
@@ -489,9 +489,9 @@ int main(int argc,char* argv[]){
                 std::chrono::milliseconds::zero();
 
             auto pool=
-                std::make_unique<minirpc::cluster::ConnectionPool>(
+                std::make_unique<asterrpc::cluster::ConnectionPool>(
                     loop_thread->Loop(),
-                    minirpc::cluster::Endpoint(
+                    asterrpc::cluster::Endpoint(
                         options.host,
                         options.port
                     ),

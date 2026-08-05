@@ -1,7 +1,7 @@
-#include "minirpc/cluster/Endpoint.h"
-#include "minirpc/health/EndpointState.h"
-#include "minirpc/health/HealthChecker.h"
-#include "minirpc/net/EventLoop.h"
+#include "asterrpc/cluster/Endpoint.h"
+#include "asterrpc/health/EndpointState.h"
+#include "asterrpc/health/HealthChecker.h"
+#include "asterrpc/net/EventLoop.h"
 
 #include <atomic>
 #include <cassert>
@@ -13,7 +13,7 @@
 #include <thread>
 #include <vector>
 
-using namespace minirpc;
+using namespace asterrpc;
 
 namespace{
 

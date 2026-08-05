@@ -1,11 +1,11 @@
-#include "minirpc/health/EndpointState.h"
+#include "asterrpc/health/EndpointState.h"
 
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <utility>
 
-namespace minirpc::health{
+namespace asterrpc::health{
 
 void ValidateEndpointStateOptions(
     const EndpointStateOptions& options

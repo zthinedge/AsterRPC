@@ -1,6 +1,6 @@
-#include "minirpc/net/TimerQueue.h"
+#include "asterrpc/net/TimerQueue.h"
 
-#include "minirpc/net/EventLoop.h"
+#include "asterrpc/net/EventLoop.h"
 
 #include <cerrno>
 #include <stdexcept>
@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include <utility>
 
-namespace minirpc::net{
+namespace asterrpc::net{
 namespace{
 
 int CreateTimerFd(){

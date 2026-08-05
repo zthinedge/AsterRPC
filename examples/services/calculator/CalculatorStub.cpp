@@ -1,13 +1,13 @@
 #include "CalculatorStub.h"
 
 #include "CalculatorService.h"
-#include "minirpc/rpc/RpcClient.h"
+#include "asterrpc/rpc/RpcClient.h"
 
 #include <stdexcept>
 #include <string>
 #include <utility>
 
-namespace minirpc::example::calculator{
+namespace asterrpc::example::calculator{
 
 CalculatorStub::CalculatorStub(rpc::RpcClient* client)
     :client_(client){

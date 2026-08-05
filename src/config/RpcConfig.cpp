@@ -1,4 +1,4 @@
-#include "minirpc/config/RpcConfig.h"
+#include "asterrpc/config/RpcConfig.h"
 
 #include <nlohmann/json.hpp>
 
@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-namespace minirpc::config{
+namespace asterrpc::config{
 namespace{
 
 using Json=nlohmann::json;

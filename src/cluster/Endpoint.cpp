@@ -1,11 +1,11 @@
-#include "minirpc/cluster/Endpoint.h"
+#include "asterrpc/cluster/Endpoint.h"
 
 #include <arpa/inet.h>
 #include <functional>
 #include <stdexcept>
 #include <utility>
 
-namespace minirpc::cluster{
+namespace asterrpc::cluster{
 
 Endpoint::Endpoint(std::string ip,std::uint16_t port)
     :ip_(std::move(ip)),port_(port){

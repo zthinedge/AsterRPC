@@ -1,6 +1,6 @@
 #include "AdminPage.h"
 
-namespace minirpc::gateway{
+namespace asterrpc::gateway{
 
 std::string_view AdminPageHtml()noexcept{
     static constexpr std::string_view html=R"ASTERHTML(<!doctype html>

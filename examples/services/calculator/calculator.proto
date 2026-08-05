@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package minirpc.example.calculator;
+package asterrpc.example.calculator;
 
 message AddRequest {
     int32 a = 1;

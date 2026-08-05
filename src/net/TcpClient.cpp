@@ -1,9 +1,9 @@
-#include "minirpc/net/TcpClient.h"
-#include "minirpc/net/EventLoop.h"
+#include "asterrpc/net/TcpClient.h"
+#include "asterrpc/net/EventLoop.h"
 
 #include <utility>
 
-namespace minirpc::net{
+namespace asterrpc::net{
 
 TcpClient::TcpClient(EventLoop*loop,const InetAddress& server_addr)
     :loop_(loop),connector_(loop,server_addr){

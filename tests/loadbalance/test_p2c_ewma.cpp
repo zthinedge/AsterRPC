@@ -1,6 +1,6 @@
-#include "minirpc/cluster/Endpoint.h"
-#include "minirpc/health/EndpointState.h"
-#include "minirpc/loadbalance/P2cEwmaLoadBalancer.h"
+#include "asterrpc/cluster/Endpoint.h"
+#include "asterrpc/health/EndpointState.h"
+#include "asterrpc/loadbalance/P2cEwmaLoadBalancer.h"
 
 #include <atomic>
 #include <cassert>
@@ -11,7 +11,7 @@
 #include <thread>
 #include <vector>
 
-using namespace minirpc;
+using namespace asterrpc;
 
 namespace{
 

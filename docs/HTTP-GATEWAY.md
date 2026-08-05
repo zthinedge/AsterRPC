@@ -25,7 +25,7 @@ POST /rpc/{service}/{method}
 
 ```text
 POST /rpc/CalculatorService/Add
-POST /rpc/minirpc.example.calculator.CalculatorService/Add
+POST /rpc/asterrpc.example.calculator.CalculatorService/Add
 ```
 
 网关通过 `ServiceDescriptor` 查找方法，再通过
@@ -40,7 +40,7 @@ POST /rpc/minirpc.example.calculator.CalculatorService/Add
 ```bash
 cmake -S . -B build-zk \
   -DCMAKE_BUILD_TYPE=Release \
-  -DMINIRPC_WITH_ZOOKEEPER=ON
+  -DASTERRPC_WITH_ZOOKEEPER=ON
 cmake --build build-zk \
   --target gateway_calculator_server http_gateway -j
 ```
@@ -80,7 +80,7 @@ X-Trace-Id: demo-trace-001
 ```
 
 Gateway 通过 ZooKeeper 查找
-`minirpc.example.calculator.CalculatorService` 的 Provider，根据配置中心
+`asterrpc.example.calculator.CalculatorService` 的 Provider，根据配置中心
 选择 RoundRobin 或 P2C-EWMA，并使用 `ChannelManager` 复用连接池。
 客户端未提供
 `X-Trace-Id` 时自动生成；提供合法值时沿用该值。Gateway 日志与 RPC

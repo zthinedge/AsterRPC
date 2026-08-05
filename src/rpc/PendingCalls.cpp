@@ -1,10 +1,10 @@
-#include "minirpc/rpc/PendingCalls.h"
+#include "asterrpc/rpc/PendingCalls.h"
 
 #include <chrono>
 #include <stdexcept>
 #include <utility>
 
-namespace minirpc::rpc{
+namespace asterrpc::rpc{
 namespace{
 
 protocol::RpcMessage MakeErrorResponse(

@@ -1,11 +1,11 @@
 #include "CalculatorStub.h"
-#include "minirpc/log/AsyncLogger.h"
-#include "minirpc/log/LogMacros.h"
-#include "minirpc/metrics/RpcMetrics.h"
-#include "minirpc/net/EventLoop.h"
-#include "minirpc/net/InetAddress.h"
-#include "minirpc/rpc/CallOptions.h"
-#include "minirpc/rpc/RpcClient.h"
+#include "asterrpc/log/AsyncLogger.h"
+#include "asterrpc/log/LogMacros.h"
+#include "asterrpc/metrics/RpcMetrics.h"
+#include "asterrpc/net/EventLoop.h"
+#include "asterrpc/net/InetAddress.h"
+#include "asterrpc/rpc/CallOptions.h"
+#include "asterrpc/rpc/RpcClient.h"
 
 #include <chrono>
 #include <cstdint>
@@ -15,8 +15,8 @@
 #include <string>
 #include <thread>
 
-using namespace minirpc;
-using namespace minirpc::example::calculator;
+using namespace asterrpc;
+using namespace asterrpc::example::calculator;
 
 namespace{
 
@@ -89,7 +89,7 @@ int main(int argc,char* argv[]){
         int exit_code=1;
 
         client.SetConnectionCallback([&](){
-            MINIRPC_LOG_INFO(logger,"connected to calculator server");
+            ASTERRPC_LOG_INFO(logger,"connected to calculator server");
 
             call_thread=std::thread([&](){
                 try{
@@ -105,14 +105,14 @@ int main(int argc,char* argv[]){
                              <<arguments.right<<" = "
                              <<response.result()<<'\n';
 
-                    MINIRPC_LOG_INFO(
+                    ASTERRPC_LOG_INFO(
                         logger,
                         "rpc result="+std::to_string(response.result())
                     );
                     exit_code=0;
                 }catch(const std::exception& error){
                     std::cerr<<"rpc call failed: "<<error.what()<<'\n';
-                    MINIRPC_LOG_ERROR(logger,error.what());
+                    ASTERRPC_LOG_ERROR(logger,error.what());
                 }
 
                 client.Disconnect();
@@ -127,7 +127,7 @@ int main(int argc,char* argv[]){
             std::string message=
                 "connect failed: "+std::string(std::strerror(error));
             std::cerr<<message<<'\n';
-            MINIRPC_LOG_ERROR(logger,message);
+            ASTERRPC_LOG_ERROR(logger,message);
             loop.Stop();
         });
 

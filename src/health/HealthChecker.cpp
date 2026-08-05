@@ -1,6 +1,6 @@
-#include "minirpc/health/HealthChecker.h"
+#include "asterrpc/health/HealthChecker.h"
 
-#include "minirpc/net/EventLoop.h"
+#include "asterrpc/net/EventLoop.h"
 
 #include <atomic>
 #include <cmath>
@@ -10,7 +10,7 @@
 #include <unordered_set>
 #include <utility>
 
-namespace minirpc::health{
+namespace asterrpc::health{
 
 namespace{
 
