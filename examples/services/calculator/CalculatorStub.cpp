@@ -20,9 +20,6 @@ AddResponse CalculatorStub::Add(
     const AddRequest& request,
     rpc::CallOptions options
 )const{
-    // Add只计算结果，没有写入副作用，因此Stub将它标记为幂等方法。
-    options.idempotent=true;
-
     std::string payload;
     if(!request.SerializeToString(&payload)){
         throw std::runtime_error(

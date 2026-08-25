@@ -18,9 +18,6 @@ RpcMessage MakeRequest(){
     message.meta.service_name="UserService";
     message.meta.method_name="GetUser";
     message.meta.deadline_us=123456789;
-    message.meta.trace_id="0123456789abcdef0123456789abcdef";
-    message.meta.span_id="0123456789abcdef";
-    message.meta.parent_span_id="fedcba9876543210";
     message.payload=std::string("user\0id",7);
     return message;
 }
@@ -47,9 +44,6 @@ void AssertMessageEqual(
     assert(left.meta.status_code==right.meta.status_code);
     assert(left.meta.error_text==right.meta.error_text);
     assert(left.meta.deadline_us==right.meta.deadline_us);
-    assert(left.meta.trace_id==right.meta.trace_id);
-    assert(left.meta.span_id==right.meta.span_id);
-    assert(left.meta.parent_span_id==right.meta.parent_span_id);
     assert(left.payload==right.payload);
 }
 

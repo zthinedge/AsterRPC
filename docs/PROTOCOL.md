@@ -60,7 +60,6 @@ TCP 只提供连续字节流，没有 RPC 消息边界。一次 `send` 的数据
 - `service_name`、`method_name`：服务端分发路由。
 - `status_code`、`error_text`：调用结果和错误信息。
 - `deadline_us`：绝对截止时间。
-- `trace_id`、`span_id`、`parent_span_id`：调用链上下文。
 
 Meta 由内部的 `RpcMetaCodec` 编码，字符串采用“4 字节长度 + 内容”的形式，整数
 采用固定宽度网络字节序。它不是 Protobuf 消息。
@@ -106,12 +105,3 @@ payload = Protobuf 响应对象的序列化结果
 ```
 
 同一连接可以同时存在多个在途请求，即使响应乱序到达，也不会匹配错误。
-
-## 7. TraceContext
-
-客户端在根调用时生成 `trace_id` 和客户端 `span_id`。服务端收到请求后创建新的
-服务端 Span，并通过 `parent_span_id` 指向上游 Span。服务端继续调用下游服务时，
-新的请求继承相同的 `trace_id`。
-
-`TraceScope` 在 Handler 或回调结束时恢复原线程上下文，避免 EventLoop 线程复用时
-把上一条请求的 Trace 泄漏给下一条请求。

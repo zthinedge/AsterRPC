@@ -1,19 +1,14 @@
 #pragma once
 
-#include "asterrpc/metrics/RpcMetrics.h"
 #include "asterrpc/net/TcpClient.h"
 #include "asterrpc/protocol/RpcCodec.h"
 #include "asterrpc/rpc/CallOptions.h"
 #include "asterrpc/rpc/PendingCalls.h"
-#include "asterrpc/trace/TraceContext.h"
 
 #include <atomic>
 #include <cstdint>
 #include <functional>
-#include <memory>
 #include <string>
-#include <string_view>
-#include <vector>
 
 namespace asterrpc::net{
 class EventLoop;
@@ -61,33 +56,12 @@ public:
     );
 
     bool IsConnected()const noexcept;
-    metrics::RpcMetricsSnapshot GetMetrics()const noexcept;
-    metrics::RpcMetricsSnapshot GetMethodMetrics(
-        std::string_view service_name,
-        std::string_view method_name
-    )const noexcept;
-    std::vector<metrics::RpcMethodMetricsSnapshot>
-    GetAllMethodMetrics()const;
 
     void SetConnectionCallback(ConnectionCallback callback);
     void SetCloseCallback(CloseCallback callback);
     void SetErrorCallback(ErrorCallback callback);
 
 private:
-    struct CallState{
-        std::string service_name;
-        std::string method_name;
-        std::string payload;
-        std::uint64_t deadline_us=0;
-        std::uint32_t max_retries=0;
-        std::uint32_t attempts=0;
-        bool idempotent=false;
-        bool finished=false;
-        trace::TraceContext trace_context;
-        metrics::RpcMetrics::TimePoint started_at;
-        ResponseCallback completion;
-    };
-
     std::uint64_t NextRequestId()noexcept;
 
     void StartCall(
@@ -98,14 +72,11 @@ private:
         ResponseCallback completion
     );
 
-    void StartAttempt(const std::shared_ptr<CallState>& state);
-    void HandleAttemptResponse(
-        const std::shared_ptr<CallState>& state,
-        protocol::RpcMessage response
-    );
-
     protocol::RpcMessage MakeRequest(
-        const CallState& state
+        std::string service_name,
+        std::string method_name,
+        std::string payload,
+        std::uint64_t deadline_us
     );
 
     void AddTimeout(
@@ -131,7 +102,6 @@ private:
     std::atomic_uint64_t next_request_id_;
     std::atomic_bool connected_;
     PendingCalls pending_calls_;
-    metrics::RpcMetrics metrics_;
 
     ConnectionCallback connection_callback_;
     CloseCallback close_callback_;

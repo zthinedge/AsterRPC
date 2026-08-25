@@ -1,12 +1,10 @@
 #include "asterrpc/rpc/RpcClient.h"
 
-#include "asterrpc/cluster/RetryPolicy.h"
 #include "asterrpc/net/Buffer.h"
 #include "asterrpc/net/EventLoop.h"
 #include "asterrpc/net/TcpConnection.h"
 #include "rpc/detail/CallSupport.h"
 
-#include <chrono>
 #include <stdexcept>
 #include <utility>
 
@@ -21,10 +19,7 @@ RpcClient::RpcClient(
   connected_(false){
     tcp_client_.SetConnectionCallback(
         [this](net::TcpConnection*){
-            bool was_connected=connected_.exchange(true);
-            if(!was_connected){
-                metrics_.ConnectionOpened();
-            }
+            connected_.store(true);
 
             if(connection_callback_){
                 connection_callback_();
@@ -135,113 +130,45 @@ void RpcClient::StartCall(
     CallOptions options,
     ResponseCallback completion
 ){
-    auto state=std::make_shared<CallState>();
-    state->service_name=std::move(service_name);
-    state->method_name=std::move(method_name);
-    state->payload=std::move(payload);
-    state->deadline_us=detail::ResolveDeadline(options);
-    state->max_retries=options.max_retries;
-    state->idempotent=options.idempotent;
-    const trace::TraceContext* parent=trace::CurrentTraceContext();
-    state->trace_context=parent
-        ?trace::CreateChildSpan(*parent,state->deadline_us)
-        :trace::CreateRootTrace(state->deadline_us);
-    state->deadline_us=state->trace_context.deadline_us;
-    state->started_at=metrics::RpcMetrics::Clock::now();
-    state->completion=std::move(completion);
-    metrics_.RequestStarted(
-        state->service_name,
-        state->method_name
+    const std::uint64_t deadline_us=detail::ResolveDeadline(options);
+    protocol::RpcMessage request=MakeRequest(
+        std::move(service_name),
+        std::move(method_name),
+        std::move(payload),
+        deadline_us
     );
-
-    StartAttempt(state);
-}
-
-void RpcClient::StartAttempt(
-    const std::shared_ptr<CallState>& state
-){
-    protocol::RpcMessage request=MakeRequest(*state);
     std::string bytes=codec_.Encode(request);
-    ++state->attempts;
 
     pending_calls_.Add(
         request.request_id,
-        state->deadline_us,
-        [this,state](protocol::RpcMessage response){
-            HandleAttemptResponse(state,std::move(response));
-        }
+        deadline_us,
+        std::move(completion)
     );
 
-    if(state->deadline_us!=0){
-        AddTimeout(request.request_id,state->deadline_us);
+    if(deadline_us!=0){
+        AddTimeout(request.request_id,deadline_us);
     }
 
-    if(detail::DeadlineReached(state->deadline_us)){
+    if(detail::DeadlineReached(deadline_us)){
         return;
     }
 
     SendRequest(request.request_id,std::move(bytes));
 }
 
-void RpcClient::HandleAttemptResponse(
-    const std::shared_ptr<CallState>& state,
-    protocol::RpcMessage response
-){
-    if(state->finished){
-        return;
-    }
-
-    bool can_retry=
-        state->idempotent&&
-        response.meta.status_code==protocol::RpcError::InternalError&&
-        state->attempts<=state->max_retries&&
-        !detail::DeadlineReached(state->deadline_us);
-
-    if(can_retry){
-        metrics_.RetryStarted(
-            state->service_name,
-            state->method_name
-        );
-        cluster::RetryPolicy retry_policy(
-            static_cast<std::size_t>(state->max_retries)+1,
-            std::chrono::milliseconds(1),
-            2.0,
-            std::chrono::seconds(1)
-        );
-        loop_->RunAfter(
-            retry_policy.BackoffForRetry(state->attempts),
-            [this,state](){
-                StartAttempt(state);
-            }
-        );
-        return;
-    }
-
-    state->finished=true;
-    metrics_.RequestFinished(
-        state->service_name,
-        state->method_name,
-        response.meta.status_code,
-        state->started_at
-    );
-    trace::TraceScope trace_scope(state->trace_context);
-    state->completion(std::move(response));
-}
-
 protocol::RpcMessage RpcClient::MakeRequest(
-    const CallState& state
+    std::string service_name,
+    std::string method_name,
+    std::string payload,
+    std::uint64_t deadline_us
 ){
     protocol::RpcMessage request;
     request.message_type=protocol::MessageType::Request;
     request.request_id=NextRequestId();
-    request.meta.service_name=state.service_name;
-    request.meta.method_name=state.method_name;
-    request.meta.deadline_us=state.deadline_us;
-    request.meta.trace_id=state.trace_context.trace_id;
-    request.meta.span_id=state.trace_context.span_id;
-    request.meta.parent_span_id=
-        state.trace_context.parent_span_id;
-    request.payload=state.payload;
+    request.meta.service_name=std::move(service_name);
+    request.meta.method_name=std::move(method_name);
+    request.meta.deadline_us=deadline_us;
+    request.payload=std::move(payload);
     return request;
 }
 
@@ -292,9 +219,7 @@ void RpcClient::SendRequest(
 }
 
 void RpcClient::HandleConnectionLost(){
-    if(connected_.exchange(false)){
-        metrics_.ConnectionClosed();
-    }
+    connected_.store(false);
     pending_calls_.FailAll(
         protocol::StatusCode::ConnectionFailed,
         "rpc connection lost"
@@ -303,22 +228,6 @@ void RpcClient::HandleConnectionLost(){
 
 bool RpcClient::IsConnected()const noexcept{
     return connected_.load();
-}
-
-metrics::RpcMetricsSnapshot RpcClient::GetMetrics()const noexcept{
-    return metrics_.Snapshot();
-}
-
-metrics::RpcMetricsSnapshot RpcClient::GetMethodMetrics(
-    std::string_view service_name,
-    std::string_view method_name
-)const noexcept{
-    return metrics_.MethodSnapshot(service_name,method_name);
-}
-
-std::vector<metrics::RpcMethodMetricsSnapshot>
-RpcClient::GetAllMethodMetrics()const{
-    return metrics_.MethodSnapshots();
 }
 
 void RpcClient::SetConnectionCallback(ConnectionCallback callback){

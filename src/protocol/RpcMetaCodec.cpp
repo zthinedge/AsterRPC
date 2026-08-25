@@ -49,15 +49,12 @@ bool ReadString(
 }
 
 std::string RpcMetaCodec::Encode(const RpcMeta& meta)const{
-    std::size_t total_size=36;
+    std::size_t total_size=24;
 
     const std::string* fields[]={
         &meta.service_name,
         &meta.method_name,
-        &meta.error_text,
-        &meta.trace_id,
-        &meta.span_id,
-        &meta.parent_span_id
+        &meta.error_text
     };
 
     for(const std::string* field:fields){
@@ -100,24 +97,6 @@ std::string RpcMetaCodec::Encode(const RpcMeta& meta)const{
     output.append(meta.error_text);
 
     AppendUint64(&output,meta.deadline_us);
-
-    AppendUint32(
-        &output,
-        static_cast<std::uint32_t>(meta.trace_id.size())
-    );
-    output.append(meta.trace_id);
-
-    AppendUint32(
-        &output,
-        static_cast<std::uint32_t>(meta.span_id.size())
-    );
-    output.append(meta.span_id);
-
-    AppendUint32(
-        &output,
-        static_cast<std::uint32_t>(meta.parent_span_id.size())
-    );
-    output.append(meta.parent_span_id);
 
     return output;
 }
@@ -174,21 +153,6 @@ bool RpcMetaCodec::Decode(
 
     decoded.deadline_us=ReadUint64(cursor);
     cursor+=8;
-
-    if(!ReadString(&cursor,end,&decoded.trace_id)){
-        SetError(error,"invalid rpc trace id");
-        return false;
-    }
-
-    if(!ReadString(&cursor,end,&decoded.span_id)){
-        SetError(error,"invalid rpc span id");
-        return false;
-    }
-
-    if(!ReadString(&cursor,end,&decoded.parent_span_id)){
-        SetError(error,"invalid rpc parent span id");
-        return false;
-    }
 
     if(cursor!=end){
         SetError(error,"unexpected rpc meta bytes");

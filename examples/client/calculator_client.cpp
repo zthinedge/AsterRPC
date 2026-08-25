@@ -1,7 +1,4 @@
 #include "CalculatorStub.h"
-#include "asterrpc/log/AsyncLogger.h"
-#include "asterrpc/log/LogMacros.h"
-#include "asterrpc/metrics/RpcMetrics.h"
 #include "asterrpc/net/EventLoop.h"
 #include "asterrpc/net/InetAddress.h"
 #include "asterrpc/rpc/CallOptions.h"
@@ -52,34 +49,11 @@ ClientArguments ParseArguments(int argc,char* argv[]){
     return arguments;
 }
 
-void PrintMetrics(const metrics::RpcMetricsSnapshot& snapshot){
-    std::cout<<"\n[client metrics]\n"
-             <<"total requests: "<<snapshot.total_requests<<'\n'
-             <<"successful requests: "
-             <<snapshot.successful_requests<<'\n'
-             <<"failed requests: "<<snapshot.failed_requests<<'\n'
-             <<"timeout requests: "<<snapshot.timeout_requests<<'\n'
-             <<"retries: "<<snapshot.retries<<'\n'
-             <<"inflight requests: "<<snapshot.inflight_requests<<'\n'
-             <<"active connections: "<<snapshot.active_connections<<'\n'
-             <<"average latency(us): "
-             <<snapshot.AverageLatencyMicros()<<'\n'
-             <<"max latency(us): "<<snapshot.max_latency_us<<'\n'
-             <<"P50/P95/P99(us): "
-             <<snapshot.p50_latency_us<<'/'
-             <<snapshot.p95_latency_us<<'/'
-             <<snapshot.p99_latency_us<<'\n';
-}
-
 }
 
 int main(int argc,char* argv[]){
     try{
         ClientArguments arguments=ParseArguments(argc,argv);
-
-        log::LoggerOptions log_options;
-        log_options.file_path="logs/calculator_client.log";
-        log::AsyncLogger logger(log_options);
 
         net::EventLoop loop;
         net::InetAddress server_address(arguments.host,arguments.port);
@@ -89,8 +63,6 @@ int main(int argc,char* argv[]){
         int exit_code=1;
 
         client.SetConnectionCallback([&](){
-            ASTERRPC_LOG_INFO(logger,"connected to calculator server");
-
             call_thread=std::thread([&](){
                 try{
                     AddRequest request;
@@ -105,14 +77,9 @@ int main(int argc,char* argv[]){
                              <<arguments.right<<" = "
                              <<response.result()<<'\n';
 
-                    ASTERRPC_LOG_INFO(
-                        logger,
-                        "rpc result="+std::to_string(response.result())
-                    );
                     exit_code=0;
                 }catch(const std::exception& error){
                     std::cerr<<"rpc call failed: "<<error.what()<<'\n';
-                    ASTERRPC_LOG_ERROR(logger,error.what());
                 }
 
                 client.Disconnect();
@@ -127,7 +94,6 @@ int main(int argc,char* argv[]){
             std::string message=
                 "connect failed: "+std::string(std::strerror(error));
             std::cerr<<message<<'\n';
-            ASTERRPC_LOG_ERROR(logger,message);
             loop.Stop();
         });
 
@@ -138,9 +104,6 @@ int main(int argc,char* argv[]){
             call_thread.join();
         }
 
-        PrintMetrics(client.GetMetrics());
-
-        logger.Stop();
         return exit_code;
     }catch(const std::exception& error){
         std::cerr<<"client error: "<<error.what()<<'\n';

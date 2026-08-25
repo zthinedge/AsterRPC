@@ -1,7 +1,4 @@
 #include "CalculatorService.h"
-#include "asterrpc/log/AsyncLogger.h"
-#include "asterrpc/log/LogMacros.h"
-#include "asterrpc/metrics/RpcMetrics.h"
 #include "asterrpc/net/EventLoop.h"
 #include "asterrpc/net/InetAddress.h"
 #include "asterrpc/rpc/RpcServer.h"
@@ -21,27 +18,13 @@ namespace{
 
 class CalculatorServiceImpl:public CalculatorService{
 public:
-    explicit CalculatorServiceImpl(log::AsyncLogger* logger)
-        :logger_(logger){}
-
     void Add(
         const AddRequest& request,
         AddResponse* response
     )override{
         int result=request.a()+request.b();
         response->set_result(result);
-
-        ASTERRPC_LOG_INFO(
-            *logger_,
-            "CalculatorService.Add: "+
-            std::to_string(request.a())+'+'+
-            std::to_string(request.b())+'='+
-            std::to_string(result)
-        );
     }
-
-private:
-    log::AsyncLogger* logger_;
 };
 
 struct Arguments{
@@ -134,35 +117,11 @@ Arguments ParseArguments(int argc,char* argv[]){
     return arguments;
 }
 
-void PrintMetrics(const metrics::RpcMetricsSnapshot& snapshot){
-    std::cout<<"\n[server metrics]\n"
-             <<"total requests: "<<snapshot.total_requests<<'\n'
-             <<"successful requests: "
-             <<snapshot.successful_requests<<'\n'
-             <<"failed requests: "<<snapshot.failed_requests<<'\n'
-             <<"timeout requests: "<<snapshot.timeout_requests<<'\n'
-             <<"retries: "<<snapshot.retries<<'\n'
-             <<"inflight requests: "<<snapshot.inflight_requests<<'\n'
-             <<"active connections: "<<snapshot.active_connections<<'\n'
-             <<"average latency(us): "
-             <<snapshot.AverageLatencyMicros()<<'\n'
-             <<"max latency(us): "<<snapshot.max_latency_us<<'\n'
-             <<"P50/P95/P99(us): "
-             <<snapshot.p50_latency_us<<'/'
-             <<snapshot.p95_latency_us<<'/'
-             <<snapshot.p99_latency_us<<'\n';
-}
-
 }
 
 int main(int argc,char* argv[]){
     try{
         Arguments arguments=ParseArguments(argc,argv);
-
-        log::LoggerOptions log_options;
-        log_options.file_path="logs/calculator_server.log";
-        log_options.roll_size_bytes=1024*1024;
-        log::AsyncLogger logger(log_options);
 
         net::EventLoop loop;
         net::InetAddress address("0.0.0.0",arguments.port);
@@ -175,7 +134,7 @@ int main(int argc,char* argv[]){
             arguments.business_queue_capacity;
         rpc::RpcServer server(&loop,address,server_options);
 
-        CalculatorServiceImpl service(&logger);
+        CalculatorServiceImpl service;
         CalculatorServiceAdapter adapter(&service);
         adapter.RegisterTo(&server);
         server.RegisterMethod(
@@ -186,12 +145,6 @@ int main(int argc,char* argv[]){
             }
         );
         server.Start();
-
-        ASTERRPC_LOG_INFO(
-            logger,
-            "calculator rpc server listening on port "+
-            std::to_string(arguments.port)
-        );
 
         std::cout<<"calculator server listening on 0.0.0.0:"
                  <<arguments.port<<'\n'
@@ -216,10 +169,6 @@ int main(int argc,char* argv[]){
         loop.Loop();
         stop_thread.join();
 
-        PrintMetrics(server.GetMetrics());
-
-        ASTERRPC_LOG_INFO(logger,"calculator rpc server stopped");
-        logger.Stop();
         return 0;
     }catch(const std::exception& error){
         std::cerr<<"server error: "<<error.what()<<'\n';

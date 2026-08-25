@@ -1,30 +1,14 @@
 #include "asterrpc/rpc/RpcServer.h"
 
 #include "asterrpc/common/ThreadPool.h"
-#include "asterrpc/health/HealthService.h"
 #include "asterrpc/net/Buffer.h"
 #include "asterrpc/net/TcpConnection.h"
-#include "asterrpc/trace/TraceContext.h"
 #include "rpc/detail/CallSupport.h"
 
 #include <stdexcept>
 #include <utility>
 
 namespace asterrpc::rpc{
-namespace{
-
-void SetResponseTrace(
-    protocol::RpcMessage* response,
-    const trace::TraceContext& context
-){
-    response->meta.trace_id=context.trace_id;
-    response->meta.span_id=context.span_id;
-    response->meta.parent_span_id=context.parent_span_id;
-    response->meta.deadline_us=context.deadline_us;
-}
-
-}
-
 RpcServer::RpcServer(
     net::EventLoop* loop,
     const net::InetAddress& addr,
@@ -49,13 +33,6 @@ RpcServer::RpcServer(
             HandleMessage(connection,buffer);
         }
     );
-    tcp_server_.SetConnectionCallback([this](){
-        metrics_.ConnectionOpened();
-    });
-    tcp_server_.SetCloseCallback([this](){
-        metrics_.ConnectionClosed();
-    });
-    health::HealthService::RegisterTo(this);
 }
 
 RpcServer::~RpcServer()=default;
@@ -74,22 +51,6 @@ void RpcServer::RegisterMethod(
 
 void RpcServer::Start(){
     tcp_server_.Start();
-}
-
-metrics::RpcMetricsSnapshot RpcServer::GetMetrics()const noexcept{
-    return metrics_.Snapshot();
-}
-
-metrics::RpcMetricsSnapshot RpcServer::GetMethodMetrics(
-    std::string_view service_name,
-    std::string_view method_name
-)const noexcept{
-    return metrics_.MethodSnapshot(service_name,method_name);
-}
-
-std::vector<metrics::RpcMethodMetricsSnapshot>
-RpcServer::GetAllMethodMetrics()const{
-    return metrics_.MethodSnapshots();
 }
 
 std::size_t RpcServer::IoThreadCount()const noexcept{
@@ -133,17 +94,6 @@ void RpcServer::HandleMessage(
             return;
         }
 
-        auto started_at=metrics::RpcMetrics::Clock::now();
-        metrics_.RequestStarted(
-            request.meta.service_name,
-            request.meta.method_name
-        );
-
-        trace::TraceContext server_span=trace::CreateServerSpan(
-            request.meta.trace_id,
-            request.meta.span_id,
-            request.meta.deadline_us
-        );
         std::weak_ptr<net::TcpConnection> weak_connection=
             connection->WeakFromThis();
 
@@ -156,9 +106,7 @@ void RpcServer::HandleMessage(
             SendResponse(
                 weak_connection,
                 request,
-                std::move(response),
-                started_at,
-                server_span
+                std::move(response)
             );
             continue;
         }
@@ -166,9 +114,7 @@ void RpcServer::HandleMessage(
         if(business_pool_==nullptr){
             ProcessRequest(
                 std::move(weak_connection),
-                std::move(request),
-                started_at,
-                std::move(server_span)
+                std::move(request)
             );
             continue;
         }
@@ -180,15 +126,11 @@ void RpcServer::HandleMessage(
             [
                 this,
                 weak_connection,
-                queued_request,
-                started_at,
-                server_span
+                queued_request
             ]()mutable{
                 ProcessRequest(
                     std::move(weak_connection),
-                    std::move(*queued_request),
-                    started_at,
-                    std::move(server_span)
+                    std::move(*queued_request)
                 );
             }
         );
@@ -202,9 +144,7 @@ void RpcServer::HandleMessage(
             SendResponse(
                 std::move(weak_connection),
                 *queued_request,
-                std::move(response),
-                started_at,
-                server_span
+                std::move(response)
             );
         }
     }
@@ -212,12 +152,8 @@ void RpcServer::HandleMessage(
 
 void RpcServer::ProcessRequest(
     std::weak_ptr<net::TcpConnection> connection,
-    protocol::RpcMessage request,
-    metrics::RpcMetrics::TimePoint started_at,
-    trace::TraceContext server_span
+    protocol::RpcMessage request
 ){
-    trace::TraceScope trace_scope(server_span);
-
     protocol::RpcMessage response=
         detail::DeadlineReached(request.meta.deadline_us)
         ?detail::MakeErrorResponse(
@@ -230,21 +166,15 @@ void RpcServer::ProcessRequest(
     SendResponse(
         std::move(connection),
         request,
-        std::move(response),
-        started_at,
-        server_span
+        std::move(response)
     );
 }
 
 void RpcServer::SendResponse(
     std::weak_ptr<net::TcpConnection> connection,
     const protocol::RpcMessage& request,
-    protocol::RpcMessage response,
-    metrics::RpcMetrics::TimePoint started_at,
-    const trace::TraceContext& server_span
+    protocol::RpcMessage response
 ){
-    SetResponseTrace(&response,server_span);
-
     std::string bytes;
     try{
         bytes=codec_.Encode(response);
@@ -254,16 +184,8 @@ void RpcServer::SendResponse(
             protocol::RpcError::InternalError,
             error.what()
         );
-        SetResponseTrace(&response,server_span);
         bytes=codec_.Encode(response);
     }
-
-    metrics_.RequestFinished(
-        request.meta.service_name,
-        request.meta.method_name,
-        response.meta.status_code,
-        started_at
-    );
 
     if(auto current=connection.lock()){
         current->Send(bytes);
