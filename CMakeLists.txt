@@ -61,6 +61,13 @@ target_link_libraries(calculator_client PRIVATE
     calculator_rpc
 )
 
+add_executable(rpc_benchmark
+    benchmarks/rpc_benchmark.cpp
+)
+target_link_libraries(rpc_benchmark PRIVATE
+    asterrpc
+)
+
 enable_testing()
 
 function(asterrpc_add_test target source)

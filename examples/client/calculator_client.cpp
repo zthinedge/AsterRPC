@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -22,6 +23,7 @@ struct ClientArguments{
     std::uint16_t port=9000;
     int left=20;
     int right=22;
+    bool one_shot=false;
 };
 
 ClientArguments ParseArguments(int argc,char* argv[]){
@@ -39,11 +41,20 @@ ClientArguments ParseArguments(int argc,char* argv[]){
         }
         arguments.port=static_cast<std::uint16_t>(port);
     }
-    if(argc>3){
-        arguments.left=std::stoi(argv[3]);
+    if(argc==4){
+        throw std::invalid_argument(
+            "both left and right operands are required"
+        );
     }
-    if(argc>4){
+    if(argc>5){
+        throw std::invalid_argument(
+            "usage: calculator_client [host] [port] [left right]"
+        );
+    }
+    if(argc==5){
+        arguments.left=std::stoi(argv[3]);
         arguments.right=std::stoi(argv[4]);
+        arguments.one_shot=true;
     }
 
     return arguments;
@@ -64,19 +75,57 @@ int main(int argc,char* argv[]){
 
         client.SetConnectionCallback([&](){
             call_thread=std::thread([&](){
-                try{
+                auto call_add=[&](int left,int right){
                     AddRequest request;
-                    request.set_a(arguments.left);
-                    request.set_b(arguments.right);
+                    request.set_a(left);
+                    request.set_b(right);
 
                     rpc::CallOptions options;
                     options.timeout=std::chrono::seconds(2);
                     AddResponse response=stub.Add(request,options);
 
-                    std::cout<<arguments.left<<" + "
-                             <<arguments.right<<" = "
+                    std::cout<<left<<" + "<<right<<" = "
                              <<response.result()<<'\n';
+                };
 
+                try{
+                    if(arguments.one_shot){
+                        call_add(arguments.left,arguments.right);
+                    }else{
+                        std::cout
+                            <<"connected to "<<arguments.host<<':'
+                            <<arguments.port<<'\n'
+                            <<"enter two integers separated by a space; "
+                            <<"enter q to quit\n";
+
+                        std::string line;
+                        while(true){
+                            std::cout<<"> "<<std::flush;
+                            if(!std::getline(std::cin,line)||
+                               line=="q"||line=="quit"||line=="exit"){
+                                break;
+                            }
+
+                            std::istringstream input(line);
+                            int left=0;
+                            int right=0;
+                            std::string extra;
+                            if(!(input>>left>>right)||(input>>extra)){
+                                std::cerr
+                                    <<"invalid input: enter two integers, "
+                                    <<"for example: 20 22\n";
+                                continue;
+                            }
+
+                            try{
+                                call_add(left,right);
+                            }catch(const std::exception& error){
+                                std::cerr
+                                    <<"rpc call failed: "
+                                    <<error.what()<<'\n';
+                            }
+                        }
+                    }
                     exit_code=0;
                 }catch(const std::exception& error){
                     std::cerr<<"rpc call failed: "<<error.what()<<'\n';

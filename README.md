@@ -50,8 +50,63 @@ ctest --test-dir build-simple --output-on-failure
 客户端：
 
 ```bash
+./build-simple/calculator_client 127.0.0.1 9000
+```
+
+连接成功后可以重复输入两个整数，每行发起一次 `Add` RPC；输入 `q` 退出：
+
+```text
+> 20 22
+20 + 22 = 42
+> 100 -7
+100 + -7 = 93
+> q
+```
+
+也可以使用单次调用模式：
+
+```bash
 ./build-simple/calculator_client 127.0.0.1 9000 20 22
 ```
+
+## RPC Benchmark
+
+服务端还注册了用于压测的 `BenchService.Echo` 方法。启动服务端后，
+可以用一个压测进程创建多条 TCP 连接，并在每条连接上复用多个并发请求：
+
+```bash
+./build-simple/rpc_benchmark \
+  --host 127.0.0.1 \
+  --port 9000 \
+  --connections 4 \
+  --concurrency 200 \
+  --requests 100000 \
+  --payload-bytes 1024 \
+  --deadline-ms 500
+```
+
+其中 `connections` 是 TCP 连接数，`concurrency` 是所有连接合计的
+未完成 RPC 数量，不代表线程数。单连接并发复用可以这样验证：
+
+```bash
+./build-simple/rpc_benchmark \
+  --connections 1 \
+  --concurrency 200 \
+  --requests 100000
+```
+
+需要让脚本或测试助手读取结果时，增加 `--json`：
+
+```bash
+./build-simple/rpc_benchmark \
+  --connections 4 \
+  --concurrency 200 \
+  --requests 100000 \
+  --json
+```
+
+`connections`、`concurrency` 的准确含义、推荐测试矩阵、测试环境和基线结果见
+[Benchmark 文档](docs/BENCHMARK.md)。
 
 ## 一次调用的主链路
 
